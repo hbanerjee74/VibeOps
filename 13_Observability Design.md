@@ -6,7 +6,9 @@ This document establishes foundational observability infrastructure by deploying
 - Azure Monitor integration for centralized log and metrics aggregation  
 - Policy-enforced diagnostic settings for all Azure resources
 
+```mermaid
 ![graph TD    %% Style definitions    classDef policyClass fill:\#FF6B6B,stroke:\#333,stroke-width:2px,color:\#fff    classDef serviceClass fill:\#4A5568,stroke:\#333,stroke-width:2px,color:\#fff    classDef collectorClass fill:\#FFA500,stroke:\#333,stroke-width:2px,color:\#000    classDef centralClass fill:\#00C853,stroke:\#333,stroke-width:2px,color:\#fff    %% Top Layer - Policy    Policy\[Azure Policy - Diagnostic Settings Enforcement\]:::policyClass    %% Services Layer    Policy --\> Svc1\[Container Workloads\<br/\>Airbyte • dbt • CI/CD\]:::serviceClass    Policy --\> Svc2\[Azure PaaS Services\<br/\>PostgreSQL • KeyVault • ADLS • ACR • NSG\]:::serviceClass    Policy --\> Svc3\[Data Platform Services\<br/\>Managed Airflow • Fabric • OneLake\]:::serviceClass    Policy --\> Cost\[Azure Cost Management\]:::serviceClass    %% Collection Methods    Svc1 --\> CI\[Container Insights\<br/\>Logs • Metrics • Events\]:::collectorClass    Svc2 --\> DS\[Diagnostic Settings\<br/\>Resource Metrics • Operation Logs\]:::collectorClass    Svc3 --\> AM\[Native Azure Monitor\<br/\>& Fabric Workspace APIs\]:::collectorClass    Cost --\> CE\[Cost Exports\<br/\>Budget Alerts\]:::collectorClass    %% Central Hub    CI --\> LAW\[Log Analytics Workspace\<br/\>Customer Hub\]:::centralClass    DS --\> LAW    AM --\> LAW    CE --\> LAW    %% Monitoring Layer    LAW --\> Monitor\[Azure Monitor Dashboards & Application Insights\]:::centralClass][image1]
+```
 
 ## **1\. Collection Methods and Service Coverage**
 
