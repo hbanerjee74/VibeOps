@@ -37,13 +37,13 @@ All Azure resources, containers, and data pipelines send metrics and logs to a c
 **Security**
 
 - Network isolation and zero-trust architecture  
-- End-to-end encryption and managed identities → *See [Governance Design](?tab=t.6753yo7ijvj4) and [Authentication Design](?tab=t.jivqs1gv2wsg) for details*
+- End-to-end encryption and managed identities → *See Governance Design and Authentication Design for details*
 
 **Availability & Reliability**
 
 - Infrastructure as Code for environment recreation  
-- Automated rollback capabilities → *See [Platform Foundations](?tab=t.743omr8imo7x) for constraints and [Infrastructure Design](?tab=t.fri20i7cxwln) for implementation*  
-- Local artifact caching for operations → *See [Data Platform Design](?tab=t.u66ssxt6mxd9) and [CICD Design](?tab=t.ryiv4bvcas2l) for specifications*
+- Automated rollback capabilities → *See Platform Foundations for constraints and Infrastructure Design for implementation*  
+- Local artifact caching for operations → *See Data Platform Design and CICD Design for specifications*
 
 **Performance**
 
@@ -52,11 +52,7 @@ All Azure resources, containers, and data pipelines send metrics and logs to a c
 **Operational Excellence**
 
 - Zero-touch automation  
-- Complete observability coverage → *See [Observability Design](?tab=t.a9o5dv2detxu) and [CICD Design](?tab=t.ryiv4bvcas2l) for implementation*
-
-You're absolutely correct. You're **using** the customer's existing observability infrastructure in their hub, not deploying it.
-
-Here's the corrected table:
+- Complete observability coverage → *See Observability Design and CICD Design for implementation*
 
 ## **4\. Platform Technology Stack**
 
