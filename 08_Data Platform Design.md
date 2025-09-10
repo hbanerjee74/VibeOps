@@ -77,7 +77,34 @@ Microsoft Fabric requires permissions at two distinct levels:
 - No permission changes needed  
 - Fabric SP remains dormant between deployments
 
-![sequenceDiagram    participant Runner as CI/CD Runner    participant KV as Key Vault    participant Azure as Azure Resources    participant Fabric as Fabric API    participant dbt as dbt Container    participant SQL as Fabric SQL    Note over Runner: Deployment (Runner MI)    Runner-\>\>Azure: Create resources (Runner MI)    Runner-\>\>KV: Get Fabric SP (Runner MI)    Runner-\>\>Fabric: Auth with Fabric SP    Runner-\>\>Fabric: Create workspace    Fabric--\>\>Runner: Return IDs    Runner-\>\>Fabric: Grant data\_platform MI Admin    Runner-\>\>KV: Store resource IDs    Note over Runner: Runner MI retains access        Note over dbt: Runtime (Data Platform MI)    dbt-\>\>KV: Get resource IDs (data MI)    dbt-\>\>SQL: Connect as Admin (data MI)    Note over Fabric: Fabric SP dormant        Note over Runner: Future Deployments    Runner-\>\>KV: Get Fabric SP (Runner MI)    Runner-\>\>Fabric: Modify workspace (Fabric SP)][image1]
+```mermaid
+sequenceDiagram
+    participant Runner as CI/CD Runner
+    participant KV as Key Vault
+    participant Azure as Azure Resources
+    participant Fabric as Fabric API
+    participant dbt as dbt Container
+    participant SQL as Fabric SQL
+
+    Note over Runner: Deployment (Runner MI)
+    Runner->>Azure: Create resources (Runner MI)
+    Runner->>KV: Get Fabric SP (Runner MI)
+    Runner->>Fabric: Auth with Fabric SP
+    Runner->>Fabric: Create workspace
+    Fabric-->>Runner: Return IDs
+    Runner->>Fabric: Grant data_platform MI Admin
+    Runner->>KV: Store resource IDs
+    Note over Runner: Runner MI retains access
+    
+    Note over dbt: Runtime (Data Platform MI)
+    dbt->>KV: Get resource IDs (data MI)
+    dbt->>SQL: Connect as Admin (data MI)
+    Note over Fabric: Fabric SP dormant
+    
+    Note over Runner: Future Deployments
+    Runner->>KV: Get Fabric SP (Runner MI)
+    Runner->>Fabric: Modify workspace (Fabric SP)
+```
 
 **Role Mapping**
 
