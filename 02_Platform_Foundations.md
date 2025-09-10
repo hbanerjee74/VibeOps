@@ -47,9 +47,13 @@
 
 - Medallion architecture: Landing (ADLS) → Bronze → Silver → Gold (OneLake)  
 - Single Lakehouse per environment with folder-based medallion separation  
-- Lakehouse and folders created by Terraform, schemas created by dbt at runtime  
-- Database schemas created lazily at runtime by dbt execution engine  
-- Single dbt project spanning all layers
+- Lakehouse and landing folder created by Terraform.   
+- Single dbt project spanning all layers  
+  - Database schemas created lazily at runtime by dbt execution engine. Data platform MI has `CREATE SCHEMA` privileges.   
+  - dbt Config Ownership: Service Central bootstraps baseline `profiles.yml` and `dbt_project.yml` into the tenant repo. From that point, the tenant repo owns and maintains these files.   
+  - Secrets Handling: All dbt/warehouse secrets resolve at runtime from Key Vault (not committed to git). Non-secret settings are versioned in the tenant repo.  
+  - Environment Isolation: Each environment (dev/test/prod) runs in a separate workspace; warehouses/catalogs are isolated per env.  
+  - Elementary Storage: Elementary (OSS) is the data quality layer for dbt. Its package models materialize in an `elementary` schema within each workspace/environment.
 
 ### **Processing Patterns**
 
@@ -101,60 +105,41 @@ Post-deployment manual configuration required:
 
 ## **3\. Current Limitations**
 
-### **Storage & Naming**
-
-- Fixed storage account naming pattern: `{customer}{env}{service}st{instance}`  
-- Azure names limited to 24 characters, lowercase alphanumeric only  
-- No custom storage account names outside the pattern  
-- Container names within storage accounts are standardized and cannot be customized
-
-### **Schema Management**
-
-- Schema drift not supported – pipelines fail on schema changes  
-- Column additions/deletions are breaking changes  
-- Data type changes cause merge failures  
-- Manual intervention required for any schema modifications  
-- Custom Airbyte connectors not supported
-
-### **Watermark Management**
-
-- Dual watermark system: Airbyte for extraction, dbt for Bronze merges  
-- No synchronization between Airbyte and dbt watermarks  
-- Manual watermark reset requires Airbyte UI intervention  
-- Lost watermark state requires full historical reprocessing  
-- Risk of duplicate processing or data loss if systems desynchronize
-
-### **Error Handling & Recovery**
-
-- Bronze → Silver → Gold chain stops at first failure point  
-- No automatic retry logic  
-- No automated data reconciliation  
-- Infrastructure and network interruptions require manual restart  
-- Long-running jobs have no automatic timeout handling  
-- Concurrent DAG execution may cause resource contention
-
 ### **Operational Limitations**
 
-- No automated alerting or monitoring (Phase 1\)  
-- No automated credential expiry monitoring  
-- Fabric SP credential expiry requires Update in Key Vault before expiry.   
+- Fixed naming pattern for all services.  
+- No automated alerting or monitoring  
+- No automated credential expiry monitoring. Manual secret rotation only.   
 - Self-signed certificates supported but no auto-rotation  
-- Fixed container resource allocation (requires tfvars update and redeploy to scale)  
-- No auto-scaling capabilities  
-- No SLA guarantees for end-to-end processing  
-- Manual secret rotation only  
-- Test failure records in `test_results` schema require manual cleanup  
-- No automated retention policy for test artifacts
+- Fabric SP credential expiry requires Update in Key Vault before expiry.   
+- Manual policy conflict detection only. No pre-deployment validation of policy compatibility. Policy exemptions must be created manually if conflicts arise. 
+
+### **Data Platform Limitations**
+
+- No auto-scaling capabilities. Fixed container resource allocation (requires tfvars update and redeploy to scale).   
+- Infrastructure and network interruptions require manual restart  
+- Concurrent DAG execution may cause resource contention  
+- Batch processing only – no real-time/streaming  
+- Long-running jobs have no automatic timeout handling  
+- No end-to-end pipeline correlation tracking  
+- Custom Airbyte connectors not supported  
+- Schema drift not supported – pipelines fail on schema changes  
+- Incremental processing only – no full refresh orchestration  
+- Dual watermark system: Airbyte for extraction, dbt for Bronze merges  
+- Each source has its own DAG with straight-through orchestration based on dbt dependencies. No other orchestration patterns are supported.   
+- Bronze → Silver → Gold chain stops at first failure point  
+- No automated data reconciliation  
+- No automated retention policy for test artifacts. dbt Test failure records in `test_results` schema require manual cleanup  
+- We don’t publish the elementary results at this time. 
 
 ### **Platform Constraints**
 
 - Single region deployment only  
 - No high availability – single points of failure exist  
-- No disaster recovery or backup strategy implemented
+- No disaster recovery or backup strategy implemented  
+- Log retention controlled by customer's hub LAW, not platform-managed. Cannot enforce minimum retention periods via policy. 
 
 ## **4\. Platform Roadmap**
-
-Each phase represents a 2-month release cycle for a team of 1 architect and 3 engineers.
 
 ### **Phase 1: Foundation (Current)**
 
@@ -171,6 +156,8 @@ Each phase represents a 2-month release cycle for a team of 1 architect and 3 en
 
 **Automation & Orchestration Setup**
 
+- Extend dbt docs \- Add custom macro to generate Airbyte→Bronze mapping documentation  
+- Policy Discovery during bootstrap and automated conflict resolution.   
 - YAML generator for Airbyte/dbt/Cosmos configs  
 - Cosmos DAG generator (per-source DAGs from YAML)  
 - External Table DDL generator (ADLS → OneLake/Fabric)  
@@ -185,6 +172,14 @@ Each phase represents a 2-month release cycle for a team of 1 architect and 3 en
 **Automated Operations**
 
 - Resource limit monitoring for critical services (ACI containers, storage accounts, Fabric CU)  
+- Distributed Tracing Implementation  
+  - OpenTelemetry instrumentation for all components  
+  - Automated trace context propagation  
+  - Deploy Grafana Tempo for trace storage and visualization  
+  - Single trace view from Airflow → Airbyte → dbt → Storage  
+  - Automatic parent-child span relationships  
+  - Performance profiling and bottleneck identification  
+  - Error attribution and impact analysis  
 - Complex multi-signal alert rules in Grafana  
 - Stateful automation workflows (persistent alerts trigger escalation)  
 - Alert correlation and deduplication rules  
@@ -213,7 +208,8 @@ Each phase represents a 2-month release cycle for a team of 1 architect and 3 en
 
 - Centralized Watermark Management across dbt and Airbyte (external watermark table)  
 - Unified CDC & Streaming: Kafka → Event Stream → ADLS CDC landing → dbt → Bronze in OneLake  
-- Expanded orchestration patterns: stage-based, catchup, replay, selective re-execution
+- Expanded orchestration patterns: stage-based, catchup, replay, selective re-execution  
+- Elementary integration with Rundeck / LAW for proactive quality monitoring. 
 
 ### **Deferred & As-Needed Features**
 
@@ -229,7 +225,13 @@ Each phase represents a 2-month release cycle for a team of 1 architect and 3 en
 - Multi-cloud expansion (AWS, GCP)  
 - Alternative orchestration tools (Dagster, SQLMesh)  
 - Integration with customer's existing PAM/PIM solutions  
-- Self-service portal for SP management
+- Self-service portal for SP management  
+- Support for OpenLineage and Marquez  
+  - Automated lineage collection from Airflow, Airbyte, dbt  
+  - Impact analysis for schema changes  
+  - Data asset catalog with ownership  
+  - Freshness and quality metrics per dataset  
+  - Visual lineage graph for troubleshooting
 
 ### **Not Planned**
 

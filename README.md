@@ -1,20 +1,5 @@
 # **VibeOps Design**
 
-## **Document Reference Index**
-
-| Topic | Authoritative Document | Section |
-| :---- | :---- | :---- |
-| Network Architecture | Infrastructure Design | 2 |
-| Network Configuration (tfvars) | Customer Onboarding | 4.4 |
-| All Authentication Patterns | Authentication Design | 6 |
-| Resource Naming Standards | Governance Design | 2 |
-| Storage Architecture | Infrastructure Design | 4 |
-| Manual Post-Deploy Tasks | Customer Onboarding | 5 |
-| Terraform Modules | Infrastructure Design | 8 |
-| CI/CD Workflows | CICD Design | 4 |
-| Data Medallion Architecture | Data Platform Design | 3 |
-| Service-Specific Configs | Customer Onboarding | 4 |
-
 ## **1\. Core Features**
 
 VibeOps is a productized data platform service delivering enterprise-grade analytics infrastructure on Azure through three core capabilities:
@@ -81,7 +66,7 @@ Here's the corrected table:
 | :---- | :---- | :---- | :---- | :---- |
 | **Data Platform** |  |  |  |  |
 | Airbyte OSS | Open Source | Container (ACI) | Data extraction and loading | Application subnet |
-| dbt Core | Open Source | Container (ACI) | Data transformation and modeling | Application subnet |
+| dbt Core \+ elementary  | Open Source | Container (ACI) | dbt Core \- Data transformation and modeling.  elementary \- Executes data tests (schema, freshness, anomaly) as part of dbt build/test; generates per-run HTML/JSON quality reports. | Application subnet |
 | ADF Managed Airflow | Azure PaaS | Managed Service | DAG orchestration and scheduling | Data Platform RG |
 | Microsoft Fabric | Azure PaaS | Managed Service | Lakehouse and OneLake storage | Data Platform RG |
 | Azure Database for PostgreSQL | Azure PaaS | Managed Service | Airbyte metadata store | Data Platform RG |
@@ -110,16 +95,19 @@ Here's the corrected table:
 
 This high-level design is implemented through detailed specifications:
 
-1. [Platform Foundations](?tab=t.743omr8imo7x) for core architectural principles, assumptions, current limitations and roadmap.   
-2. [Customer Onboarding Design](?tab=t.qt8xp8p7b9lf) for onboarding workflows and requirements gathering  
-3. [Subscription Design](?tab=t.ybrm6qz8es4j) for Azure subscription and resource organization   
-4. [Infrastructure Design](?tab=t.fri20i7cxwln) for network architecture and container deployment  
-5. [Governance Design](?tab=t.6753yo7ijvj4) for Azure policies and compliance framework  
-6. [CICD Design](?tab=t.ryiv4bvcas2l) for deployment pipelines and artifact management  
-7. [Data Platform Design](?tab=t.u66ssxt6mxd9) for overall data architecture   
-8. [DBT Design](?tab=t.di8b3o7xrnmm) for transformation framework and medallion layer processing   
-9. [DBT Cosmos Integration Design](?tab=t.st466pyfxsab) for Airflow orchestration of DBT models  
-10. [Bronze Design](?tab=t.cdktg08ccl5s) for ingestion and bronze layer specifications  
-11. [Observability Design](?tab=t.a9o5dv2detxu) for monitoring, logging, and alerting architecture
+1. [Platform Foundations](02_Platform_Foundations.md) for core architectural principles, assumptions, current limitations and roadmap.   
+2. [Customer Onboarding Design](03_Customer_Onboarding_Design.md) for onboarding workflows and requirements gathering  
+3. [Subscription Design](04_Subscription_Design.md) for Azure subscription and resource organization   
+4. [Infrastructure Design](05_Infrastructure_Design.md) for network architecture and container deployment  
+5. [Authentication Design](06_Authentication_Design.md) for the authentication architecture for the platform  
+6. [Governance Design](07_Governance_Design.md) for Azure policies and compliance framework  
+7. [Data Platform Design](08_Data_Platform_Design.md) for overall data architecture   
+8. [Airbyte Design](09_Airbyte_Design.md) for Bronze Design  
+9. [DBT Design](10_DBT_Design.md) for transformation framework and medallion layer processing   
+10. [Airflow Design](11_Airflow_Design.md) for Airflow orchestration of DBT models  
+11. [CICD Design](12_CICD_Design.md) for deployment pipelines and artifact management  
+12. [Observability Design](13_Observability_Design.md) for monitoring, logging, and alerting architecture
+13. [Vibedata Integration Design](14_Vibedata_Integration.md) for monitoring, logging, and alerting architecture
+
 
 *Note: Referenced documents contain detailed technical specifications and implementation procedures for each component. The Platform Foundations document should be reviewed first to understand core principles before diving into implementation details.*

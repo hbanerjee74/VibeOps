@@ -1,7 +1,5 @@
 # **Governance Design**
 
-# **Governance Design**
-
 This document outlines the governance strategy for the VibeOps data platform deployed in customer spoke subscriptions. Governance is implemented through Azure Policies, standardized naming conventions, and mandatory tagging.
 
 ## **1\. Core Principles**

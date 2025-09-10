@@ -38,8 +38,8 @@ Core design principles:
 /dbt/
   /models/                 # Platform Bronze merge models
   /macros/                 # Platform macros (control cols, merges)
-  /profiles/               # Template profiles.yml.j2 
-  /projects/               # Template dbt_project.yml.j2
+  /profiles/               # Template profiles.yml. Updated in client repo. 
+  /projects/               # Template dbt_project.yml. Updted in client repo
 
 /container-configs/
   /dbt/                    # dbt container templates
@@ -302,7 +302,7 @@ platform_version = "3.1.0"
 - **Trigger**:  
     
   - Changes to `01_platform.tfvars` (artifact versions)  
-  - Changes to `06_dbt.tfvars` (dbt runtime configs)  
+  - Changes to `dbt_project.yml and profiles.yml` (dbt runtime configs)  
   - Changes under `/data-platform/` (dbt configs, Airflow settings, Airbyte configs)
 
 
@@ -358,6 +358,12 @@ platform_version = "3.1.0"
   - Deploy refreshed dbt docs site to blob storage.  
   - End-to-end orchestration ensures straight-through execution:  
     Bronze → Silver → Gold.
+
+**Note on Data Quality (Elementary)**
+
+- All dbt workflows (PR and environment runs) execute `dbt build/test`, which includes **Elementary** package tests by default.  
+- On environment runs, publish the **Elementary report** (HTML/JSON) and dbt artifacts (manifest/run\_results/catalog) as build artifacts and upload them to the tenant’s observability path (see *Observability Design* for storage & retention).  
+- Pipelines **fail** on test failures according to dbt/Elementary severity settings. 
 
 #### Utility & Scripts Workflow
 
@@ -427,7 +433,33 @@ Runner containers integrate with existing observability infrastructure per Obser
 
 ## **7\. CI/CD Automation Utilities**
 
-This section defines the automation utilities required for the VibeOps platform's artifact-driven CI/CD model. These utilities bridge the gap between developer configurations and platform-generated artifacts, ensuring consistency and eliminating manual generation tasks.
+This section defines the automation utilities that implement VibeOps platform's hybrid infrastructure-as-code model. These Python-based utilities handle all dynamic generation logic, keeping infrastructure deployment tools (Terraform) focused on resource provisioning while Python handles complex data platform orchestration.
+
+**Note**: These automation utilities are planned for phase 2\. Manual generation in Phase 1 allows validation of patterns before full automation in Phase 2\. 
+
+### **Hybrid Generation Architecture**
+
+The platform separates concerns between:
+
+- **Infrastructure Layer**: Terraform for Azure resource provisioning  
+- **Dynamic Generation Layer**: Python utilities for data platform artifacts  
+- **Configuration Layer**: YAML/JSON for developer inputs
+
+This separation ensures:
+
+- Complex logic stays in Python (testable, maintainable)  
+- Infrastructure tools remain declarative and simple  
+- Clear boundaries between platform and client customization
+
+### **Core Generation Utilities**
+
+| Utility | Purpose | Inputs | Outputs |
+| :---- | :---- | :---- | :---- |
+| **Bronze Model Generator** | Creates dbt models from Airbyte sources | `airbyte_sources/*.yml` | `models/bronze/generated/*.sql` |
+| **Cosmos DAG Generator** | Builds Airflow DAGs from source configs | `airbyte_sources/*.yml` | `dags/*_cosmos_dbt_dag.py` |
+| **External Table Generator** | Creates DDL for landing → OneLake | Airbyte catalog.json \+ YAML | `sql/external_tables/*.sql` |
+| **Schema Drift Detector** | Compares source vs destination schemas | Airbyte API \+ OneLake metadata | Drift report \+ alerts |
+| **Config Validator** | Validates YAML against schemas | `airbyte_sources/*.yml` | Validation report |
 
 ### **Utility Architecture**
 
@@ -574,43 +606,6 @@ Operations:
 3. Reviews and adjusts YAML if needed  
 4. Commits to Git for CI/CD processing
 
-#### **dbt Template Renderer**
-
-**Purpose**: Renders Jinja2 templates with environment-specific values
-
-**References**:
-
-- Template structure: DBT Design Section 5 (dbt Template Structures)  
-- Secret retrieval: Authentication Design Section 5 (Secret Storage in Key Vault)  
-- Configuration sources: Customer Onboarding Design Section 4 (Configuration Structure)
-
-**Functionality**:
-
-```
-Input:
-- profiles.yml.j2
-- dbt_project.yml.j2
-- Key Vault secrets
-- terraform.tfvars values
-
-Output:
-- ~/.dbt/profiles.yml (runtime only)
-- dbt_project.yml (runtime only)
-
-Operations:
-- Retrieve secrets from Key Vault using managed identity
-- Inject Fabric SQL endpoints from infrastructure outputs
-- Apply environment-specific variables
-- Render templates with actual values
-- Never persist rendered files to Git
-```
-
-**Variable Sources**:
-
-- Infrastructure outputs → Key Vault → Template variables  
-- terraform.tfvars → Configuration variables  
-- config/06\_dbt.tfvars → dbt-specific settings
-
 #### **Platform Artifact Packager**
 
 **Purpose**: Packages and versions platform components for distribution
@@ -690,18 +685,16 @@ Components:
 2. YAML-to-Bronze Generator (if airbyte\_sources changed)  
 3. External Table DDL Generator (if sources changed)  
 4. Cosmos DAG Generator (if sources changed)  
-5. dbt compile and artifact generation  
-6. Secret scanner (gitleaks) on all changes  
-7. Platform Artifact Packager (Service Central only)
+5. Secret scanner (gitleaks) on all changes  
+6. Platform Artifact Packager (Service Central only)
 
 #### **CD Pipeline Integration**
 
 **Execution Order**:
 
-1. dbt Template Renderer (render configs from Key Vault)  
-2. Deploy generated artifacts to target environment  
-3. Execute external table DDL scripts  
-4. Validate deployment success
+1. Deploy generated artifacts to target environment  
+2. Execute external table DDL scripts  
+3. Validate deployment success
 
 ### **Utility Distribution**
 
@@ -709,7 +702,9 @@ Components:
 
 - All utilities packaged as Python scripts in platform artifacts  
 - Distributed via `vibeops-tools` Azure Artifacts feed  
-- Version-locked to platform version for consistency
+- Versioned alongside platform (`platform_version = "3.1.0"`)  
+- Run in CI/CD containers with defined dependencies  
+- Produce deterministic outputs (same input \= same output)
 
 **Execution Environment**:
 

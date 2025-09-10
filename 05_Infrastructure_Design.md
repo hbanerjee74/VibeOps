@@ -263,6 +263,8 @@ container {
 
 ## **7\. Terraform Module Architecture**
 
+Terragrunt is used as a thin wrapper around these Terraform modules to enforce DRY backend/provider configuration, manage per-environment variables, and orchestrate dependencies across modules (e.g., networking before private endpoints, storage before data-platform).
+
 ### **Core Terraform Modules**
 
 | Module | Purpose | Key Resources |

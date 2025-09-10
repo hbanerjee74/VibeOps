@@ -55,18 +55,29 @@ Prerequisites are divided into two categories:
 
 ### **Hub Infrastructure (Assumed to Exist)**
 
-As defined in Platform Foundations, the following hub resources should already exist:
-
 - Hub VNet with Azure Firewall  
-- Log Analytics Workspace in hub  
+- **Log Analytics Workspace in hub**  
+  - Customer must configure appropriate retention (minimum 30 days recommended)  
+  - Retention costs are customer's responsibility  
 - Application Insights in hub  
 - Private DNS zones in hub  
-- Firewall configured with required outbound rules (see Platform Foundations for FQDN list)
+- Firewall configured with required outbound rules
 
 ### **Access Requirements** 
 
 - Service provider guest user access to customer's Azure tenant (for Cloud Shell execution)  
 - Credentials for all service principals
+
+### **Policy Review (Manual Process)**
+
+Customer must provide before bootstrap:
+
+- Documentation of existing Azure Policies at tenant/management group level  
+- List of any Deny-effect policies currently active  
+- Existing mandatory tagging requirements  
+- Any compliance frameworks already implemented (e.g., CIS, ISO 27001\)
+
+**Note:** Automated policy discovery and conflict resolution planned for future release. Currently requires manual review and coordination with customer's cloud governance team.
 
 ## **3\. Bootstrap Process**
 
@@ -80,6 +91,7 @@ As defined in Platform Foundations, the following hub resources should already e
 │ • Download bootstrap artifacts      │
 │ • Register resource providers       │
 │ • Verify permissions                │
+│ • Verify tenant policies            │
 │ • Test connectivity                 │
 └──────────────────────┘
                ▼
@@ -337,6 +349,35 @@ See Infrastructure Design Section 2.7 for detailed procedures:
   - Storage Blob Data Contributor on data storage accounts  
   - Key Vault Secrets User for runtime secrets
 
+### 5.3 Policy Compliance Verification
+
+**Manual Steps Required:**
+
+- Access Azure Policy compliance dashboard  
+- Verify all 9 platform base policies show "Compliant" status  
+- If any show "Non-compliant":  
+  - Check for conflicts with tenant-level policies  
+  - May require creating policy exemptions  
+  - Document exemptions in customer handoff package  
+- Monitor initial compliance evaluation (can take up to 30 minutes)
+
+**Common Issues:**
+
+- Existing tenant policies may block platform policy assignment  
+- Tag inheritance from management groups may conflict  
+- Resolution requires manual exemption creation or policy modification
+
+### 5.4 Log Retention Verification
+
+**Customer Action Required:**
+
+- Verify Log Analytics Workspace retention is set to at least 30 days  
+- Confirm retention period meets compliance requirements  
+- Understand retention cost implications (charged per GB/month)  
+- Document retention period in operational runbook
+
+**Note:** Platform cannot modify or enforce retention settings on customer's hub LAW. Insufficient retention may impact troubleshooting capabilities.
+
 ## **6\. Bootstrap Implementation Details**
 
 ### **Phase 1: Environment Preparation**
@@ -355,7 +396,8 @@ See Infrastructure Design Section 2.7 for detailed procedures:
 - Bootstrap artifacts downloaded  
 - Resource providers registered  
 - Service principal permissions confirmed  
-- Connectivity tested
+- Connectivity tested  
+- Tenant policies validated and no conflicts found. 
 
 ### **Phase 2: Bootstrap Infrastructure**
 
