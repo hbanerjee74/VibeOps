@@ -56,7 +56,7 @@ All Azure resources, containers, and data pipelines send metrics and logs to a c
 
 ## **4\. Platform Technology Stack**
 
-### **Deployed Services Overview**
+### **4.1 Deployed Services Overview**
 
 | Service/Component | Type | Deployment Model | Purpose | Location |
 | :---- | :---- | :---- | :---- | :---- |
@@ -76,7 +76,7 @@ All Azure resources, containers, and data pipelines send metrics and logs to a c
 | **CI/CD** |  |  |  |  |
 | Azure DevOps Agents | Microsoft | Container (ACI) | Pipeline execution | CI/CD RG |
 
-### **Services Used (Not Deployed)**
+### **4.2 Services Used (Not Deployed)**
 
 | Service | Owner | Purpose |
 | :---- | :---- | :---- |
@@ -87,7 +87,7 @@ All Azure resources, containers, and data pipelines send metrics and logs to a c
 | Private DNS Zones | Customer Hub | Name resolution |
 | ExpressRoute/VPN | Customer Hub | On-premises connectivity |
 
-## **4\. Implementation Framework**
+## **5\. Implementation Framework**
 
 This high-level design is implemented through detailed specifications:
 
