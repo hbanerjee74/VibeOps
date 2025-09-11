@@ -43,37 +43,33 @@ Each source system has its own Cosmos-generated Airflow DAG, defined under
 Each DAG follows a **4-step structure**:
 
 1. **Airbyte Sync**  
-     
    - Task: Runs the Airbyte connection for the source system.  
    - Purpose: Extracts incremental data from the source into ADLS landing.  
-   - Trigger: Based on the `schedule` defined in the YAML config.
-
-   
-
+   - Trigger: Based on the `schedule` defined in the YAML config.  
 2. **Bronze Build**  
-     
    - Task: Executes dbt models AND tests for Bronze.  
    - Command: `dbt build --select tag:bronze_{source_name} --warn-error=false`  
    - Purpose: Merges new files into Bronze Delta tables and validates data quality.  
-   - Test failures logged but don't stop execution (warn severity).
-
-   
-
+   - Test failures logged but don't stop execution (warn severity).  
 3. **Silver Build**  
-     
    - Task: Runs dbt models AND tests for Silver.  
    - Command: `dbt build --select tag:silver_{source_name}`  
    - Purpose: Cleanses, standardizes, and validates business rules.  
-   - Test failures stop execution (error severity).
-
-   
-
+   - Test failures stop execution (error severity).  
 4. **Gold Build**  
-     
    - Task: Runs dbt models AND tests for Gold.  
    - Command: `dbt build --select tag:gold_{source_name}`  
    - Purpose: Produces validated analytical datasets.  
-   - Test failures stop execution (error severity).
+   - Test failures stop execution (error severity).  
+5. **Elementary & Artifacts**  
+   - Task: Generate Elementary report and collect artifacts  
+   - Command: `dbt run --select elementary && elementary generate report && Upload_to_observability_storage.sh`  
+   - Purpose: Data quality reporting and artifact preservation  
+     1. Upload Pattern:  
+        - Elementary HTML: /elementary-reports/{YYYY-MM-DD}/{DAG\_RUN\_ID}/elementary-report.html  
+        - Elementary JSON: /elementary-reports/{YYYY-MM-DD}/{DAG\_RUN\_ID}/elementary-report.json  
+        - dbt artifacts: /dbt-artifacts/{YYYY-MM-DD}/{DAG\_RUN\_ID}/\[manifest.json|run\_results.json|catalog.json\] where DAG\_RUN\_ID \= Airflow's run\_id  
+   - 
 
 ### **Example: Cosmos DAG for Shopify**
 
@@ -128,8 +124,20 @@ with DAG(
         select=["tag:gold"],     # all Gold models
     )
 
-    # Dependencies (straight-through flow)
-    airbyte_sync_shopify >> dbt_run_bronze >> dbt_run_silver >> dbt_run_gold
+    # Step 5: Elementary and Artifacts (NEW)
+    elementary_and_artifacts = BashOperator(
+    task_id="elementary_and_artifacts",
+    bash_command="""
+        dbt run --select elementary && \
+        elementary generate report && \
+        python /scripts/upload_observability_artifacts.py \
+            --dag_run_id {{ dag_run.run_id }} \
+            --storage_account {{ var.value.observability_storage }}
+    """
+)
+
+# Dependencies (straight-through flow)
+airbyte_sync_shopify >> dbt_run_bronze >> dbt_run_silver >> dbt_run_gold >> elementary_and_artifacts
 ```
 
 * Each DAG is per-source (here shopify).  

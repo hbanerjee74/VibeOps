@@ -2,7 +2,7 @@
 
 ## **1\. Design Principles**
 
-### **Operational Principles**
+### **1.1 Operational Principles**
 
 - **AI-First Operations:** Natural language is the primary interface for platform operations through AI assistants (Claude, ChatGPT)  
 - **Zero-Touch Automation:** Platform self-operates through automated runbooks triggered by intelligent alerting  
@@ -10,14 +10,14 @@
 - **Infrastructure as Artifacts:** Versioned, immutable artifacts distributed through automated pipelines  
 - **Code-First Configuration:** All infrastructure and configuration managed through Terraform, YAML, and version control
 
-### **Security Principles**
+### **1.2 Security Principles**
 
 - **Private by Default:** All services use private endpoints with no public exposure  
 - **Zero Secrets in Code:** No credentials stored in repositories; all secrets in Azure Key Vault  
 - **Deny-by-Default Networking:** Secure by default with all public access denied unless explicitly allowed  
 - **Policy as Code:** All Azure Policies defined in Terraform and enforced at deployment
 
-### **Architecture Principles**
+### **1.3 Architecture Principles**
 
 - **Single Source of Truth:** Each operational concern has exactly one authoritative source (Git for config, Key Vault for secrets, Terraform state for infrastructure)  
 - **Infrastructure Idempotency:** Complete infrastructure defined as code enabling reproducible deployments  
@@ -28,14 +28,14 @@
 
 ## **2\. Current Platform Configuration**
 
-### **Tenancy & Environment**
+### **2.1 Tenancy & Environment**
 
 - Single-tenant model per customer with delegated access  
 - Tenant-level isolation with dedicated subscriptions for dev and prod environments  
 - Azure Tenant, Subscription, Entra ID, and policies pre-configured  
 - Each environment in separate subscription with separate Fabric workspace
 
-### **Core Technology Stack**
+### **2.2 Core Technology Stack**
 
 - **Data Platform:** Microsoft Fabric, Airbyte OSS, ADF Managed Airflow  
 - **Compute:** Containers only (ACI initially, AKS based on customer demand)  
@@ -43,19 +43,18 @@
 - **CI/CD:** Azure DevOps with self-hosted runners in ACI, Azure Artifacts for package distribution  
 - **Observability:** Azure Monitor with logs sent to customer's hub LAW
 
-### **Data Architecture**
+### **2.3 Data Architecture**
 
-- Medallion architecture: Landing (ADLS) → Bronze → Silver → Gold (OneLake)  
+- Each environment (dev/test/prod) runs in a separate workspace; warehouses/catalogs are isolated per env.  
 - Single Lakehouse per environment with folder-based medallion separation  
 - Lakehouse and landing folder created by Terraform.   
+- Medallion architecture: Landing (ADLS) → Bronze → Silver → Gold (OneLake). Database schemas created lazily at runtime by dbt execution engine. Data platform MI has `CREATE SCHEMA` privileges.   
 - Single dbt project spanning all layers  
-  - Database schemas created lazily at runtime by dbt execution engine. Data platform MI has `CREATE SCHEMA` privileges.   
-  - dbt Config Ownership: Service Central bootstraps baseline `profiles.yml` and `dbt_project.yml` into the tenant repo. From that point, the tenant repo owns and maintains these files.   
-  - Secrets Handling: All dbt/warehouse secrets resolve at runtime from Key Vault (not committed to git). Non-secret settings are versioned in the tenant repo.  
-  - Environment Isolation: Each environment (dev/test/prod) runs in a separate workspace; warehouses/catalogs are isolated per env.  
-  - Elementary Storage: Elementary (OSS) is the data quality layer for dbt. Its package models materialize in an `elementary` schema within each workspace/environment.
+  - Service Central bootstraps baseline `profiles.yml` and `dbt_project.yml` into the tenant repo. From that point, the tenant repo owns and maintains these files.   
+  - All dbt/warehouse secrets resolve at runtime from Key Vault (not committed to git). Non-secret settings are versioned in the tenant repo.  
+  - Elementary (OSS) is the data quality layer for dbt. Its package models materialize in an `elementary` schema within each workspace/environment.
 
-### **Processing Patterns**
+### **2.4 Processing Patterns**
 
 - Batch processing only – no real-time/streaming  
 - Incremental processing only – no full refresh orchestration  
@@ -64,27 +63,27 @@
 - Idempotent merge operations in Bronze  
 - Medallion execution orchestrated via dbt dependencies (Bronze → Silver → Gold)
 
-### **Authentication**
+### **2.5 Authentication**
 
 - CI/CD runners use managed identity for all Azure operations  
 - Service principals only for external services (Fabric API, Azure DevOps)  
 - Manual secret rotation only
 
-### **Governance**
+### **2.6 Governance**
 
 - Governance applied at subscription boundary  
 - Mandatory tags enforced: customer, environment, owner, cost\_center, business\_unit  
 - Platform base policies are non-negotiable (Deny effect)  
 - Customer policies can only add restrictions, never reduce
 
-### **Development Model**
+### **2.7 Development Model**
 
 - Artifact-driven model separating platform code from client customizations  
 - All changes flow through Pull Requests  
 - Platform artifacts versioned and distributed through Azure Artifacts feeds  
 - Client repos run locally using published artifacts
 
-### **Networking**
+### **2.8 Networking**
 
 - Customer provides hub-and-spoke network architecture  
 - Customer manually configures VNet peering between spoke and hub  
@@ -95,7 +94,7 @@
 
 *See Infrastructure Design section 2 for network architecture details* *See Customer Onboarding Design section 1 for specific prerequisites*
 
-### **Manual Integration Points**
+### **2.9 Manual Integration Points**
 
 Post-deployment manual configuration required:
 
@@ -105,7 +104,7 @@ Post-deployment manual configuration required:
 
 ## **3\. Current Limitations**
 
-### **Operational Limitations**
+### **3.1 Operational Limitations**
 
 - Fixed naming pattern for all services.  
 - No automated alerting or monitoring  
@@ -114,7 +113,7 @@ Post-deployment manual configuration required:
 - Fabric SP credential expiry requires Update in Key Vault before expiry.   
 - Manual policy conflict detection only. No pre-deployment validation of policy compatibility. Policy exemptions must be created manually if conflicts arise. 
 
-### **Data Platform Limitations**
+### **3.2 Data Platform Limitations**
 
 - No auto-scaling capabilities. Fixed container resource allocation (requires tfvars update and redeploy to scale).   
 - Infrastructure and network interruptions require manual restart  
@@ -128,11 +127,9 @@ Post-deployment manual configuration required:
 - Dual watermark system: Airbyte for extraction, dbt for Bronze merges  
 - Each source has its own DAG with straight-through orchestration based on dbt dependencies. No other orchestration patterns are supported.   
 - Bronze → Silver → Gold chain stops at first failure point  
-- No automated data reconciliation  
-- No automated retention policy for test artifacts. dbt Test failure records in `test_results` schema require manual cleanup  
-- We don’t publish the elementary results at this time. 
+- No automated data reconciliation
 
-### **Platform Constraints**
+### **3.3 Platform Constraints**
 
 - Single region deployment only  
 - No high availability – single points of failure exist  
@@ -141,7 +138,7 @@ Post-deployment manual configuration required:
 
 ## **4\. Platform Roadmap**
 
-### **Phase 1: Foundation (Current)**
+### **4.1 Phase 1: Foundation (Current)**
 
 **Core Platform Bootstrap**
 
@@ -152,7 +149,7 @@ Post-deployment manual configuration required:
 - Basic observability with pipeline logs and Azure Monitor integration  
 - Data platform DAGs operational (bronze ingestion, silver/gold transformations, Cosmos DAG support, dbt docs publishing)
 
-### **Phase 2: Automation Foundation**
+### **4.2 Phase 2: Automation Foundation**
 
 **Automation & Orchestration Setup**
 
@@ -167,7 +164,7 @@ Post-deployment manual configuration required:
 - Redis cache for tool registry  
 - Basic runbook library initialization (read-only diagnostics, health checks)
 
-### **Phase 3: Reliability & Self-Healing**
+### **4.3 Phase 3: Reliability & Self-Healing**
 
 **Automated Operations**
 
@@ -189,7 +186,7 @@ Post-deployment manual configuration required:
   - Infrastructure failures (resource deletes, credential/secret expiry, quota breaches, backup restores, failed deployments)  
   - Cost optimization (auto-scaling and resource adjustments based on budget alerts)
 
-### **Phase 4: Enterprise Integration**
+### **4.4 Phase 4: Enterprise Integration**
 
 - Azure Lighthouse deployment for multi-tenant management  
   - Delegated resource management across customer tenants  
@@ -202,7 +199,7 @@ Post-deployment manual configuration required:
 - Zero-touch deployment via Azure Marketplace  
 - Customer self-service portal
 
-### **Phase 5: Data Platform Enhancements**
+### **4.5 Phase 5: Data Platform Enhancements**
 
 **Advanced Data Capabilities**
 
@@ -211,7 +208,7 @@ Post-deployment manual configuration required:
 - Expanded orchestration patterns: stage-based, catchup, replay, selective re-execution  
 - Elementary integration with Rundeck / LAW for proactive quality monitoring. 
 
-### **Deferred & As-Needed Features**
+### **4.6 Deferred & As-Needed Features**
 
 **To be scheduled based on customer requirements:**
 
@@ -233,12 +230,9 @@ Post-deployment manual configuration required:
   - Freshness and quality metrics per dataset  
   - Visual lineage graph for troubleshooting
 
-### **Not Planned**
+### **4.7 Not Planned**
 
 **Explicitly out of scope:**
 
-- OpenTelemetry collectors (using managed services instead)  
-- Custom code instrumentation (relying on built-in telemetry)  
-- Prometheus integration (Azure Monitor sufficient)  
-- VM-based quota management (containerized architecture)
+- Prometheus integration (Azure Monitor sufficient)
 

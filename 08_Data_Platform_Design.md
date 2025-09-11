@@ -17,45 +17,45 @@ The key design principles are
 
 ## **2\. Fabric Design**
 
-### **Environment Structure**
+### **2.1 Environment Structure**
 
 * **One Workspace per environment** with single Lakehouse  
 * **Lakehouse created by Terraform** during initial deployment  
 * **Schemas created lazily** by dbt at runtime. 
 
-### **Integration with CI/CD**
+### **2.2 Integration with CI/CD**
 
 * CI generates dbt models, DAGs, and external table scripts pointing to schema-qualified objects (`bronze.orders`, `silver.customers`, etc.).  
 * CD applies changes against the environment’s Lakehouse, ensuring all schemas remain consistent.  
 * External table scripts for landing files (ADLS → OneLake) target the `bronze` schema by default.
 
-### **Fabric Provisioning Process**
+### **2.3 Fabric Provisioning Process**
 
 1. **Workspace Creation** \- Terraform used the Fabric SP credentials to creates workspace using Fabric REST API. Fabric SP (as workspace admin) grants Member role to `data_platform` MI  
 2. **Capacity Assignment** \- Terraform assigns customer capacity to workspace  
 3. **Lakehouse Creation** \- Terraform creates single Lakehouse via REST API  
 4. **Schema Creation** \- dbt creates schemas on first model execution. 
 
-### **Fabric Permission Model**
+### **2.4 Fabric Permission Model**
 
 **Authentication Context**: Implements service principal and managed identity patterns from Authentication Design Sections 3-4.   
 **Deployment**: Permissions configured during infrastructure deployment via Terraform and Fabric REST API.
 
 Microsoft Fabric requires permissions at two distinct levels:
 
-#### Azure Control Plane (RBAC)
+#### 2.4.1 Azure Control Plane (RBAC)
 
 - Managed by Azure Resource Manager  
 - Controls workspace creation, capacity management  
 - Set via Terraform role assignments
 
-#### Fabric Data Plane (Workspace Roles)
+#### 2.4.2 Fabric Data Plane (Workspace Roles)
 
 - Managed within Fabric service  
 - Controls data access, SQL endpoint usage  
 - Set via Fabric REST API using service principal
 
-### Permission Flow
+### **2.5 Permission Flow**
 
 **Deployment Phase (via CI/CD Runner MI):**
 
@@ -77,34 +77,7 @@ Microsoft Fabric requires permissions at two distinct levels:
 - No permission changes needed  
 - Fabric SP remains dormant between deployments
 
-```mermaid 
-sequenceDiagram
-    participant Runner as CI/CD Runner
-    participant KV as Key Vault
-    participant Azure as Azure Resources
-    participant Fabric as Fabric API
-    participant dbt as dbt Container
-    participant SQL as Fabric SQL
-
-    Note over Runner: Deployment (Runner MI)
-    Runner->>Azure: Create resources (Runner MI)
-    Runner->>KV: Get Fabric SP (Runner MI)
-    Runner->>Fabric: Auth with Fabric SP
-    Runner->>Fabric: Create workspace
-    Fabric-->>Runner: Return IDs
-    Runner->>Fabric: Grant data_platform MI Admin
-    Runner->>KV: Store resource IDs
-    Note over Runner: Runner MI retains access
-    
-    Note over dbt: Runtime (Data Platform MI)
-    dbt->>KV: Get resource IDs (data MI)
-    dbt->>SQL: Connect as Admin (data MI)
-    Note over Fabric: Fabric SP dormant
-    
-    Note over Runner: Future Deployments
-    Runner->>KV: Get Fabric SP (Runner MI)
-    Runner->>Fabric: Modify workspace (Fabric SP)
-```
+![sequenceDiagram    participant Runner as CI/CD Runner    participant KV as Key Vault    participant Azure as Azure Resources    participant Fabric as Fabric API    participant dbt as dbt Container    participant SQL as Fabric SQL    Note over Runner: Deployment (Runner MI)    Runner-\>\>Azure: Create resources (Runner MI)    Runner-\>\>KV: Get Fabric SP (Runner MI)    Runner-\>\>Fabric: Auth with Fabric SP    Runner-\>\>Fabric: Create workspace    Fabric--\>\>Runner: Return IDs    Runner-\>\>Fabric: Grant data\_platform MI Admin    Runner-\>\>KV: Store resource IDs    Note over Runner: Runner MI retains access        Note over dbt: Runtime (Data Platform MI)    dbt-\>\>KV: Get resource IDs (data MI)    dbt-\>\>SQL: Connect as Admin (data MI)    Note over Fabric: Fabric SP dormant        Note over Runner: Future Deployments    Runner-\>\>KV: Get Fabric SP (Runner MI)    Runner-\>\>Fabric: Modify workspace (Fabric SP)][image1]
 
 **Role Mapping**
 
@@ -116,7 +89,7 @@ sequenceDiagram
 
 ## **3\. Data Design**
 
-### **Storage Locations**
+### **3.1 Storage Locations**
 
 **Storage Location:** Landing zone in ADLS, medallion layers in OneLake. Storage accounts defined in Infrastructure Design Section 4\.
 
@@ -132,7 +105,7 @@ sequenceDiagram
 - Schema: `bronze`  
 - Tables: `bronze_{source_name}_{table_name}`
 
-### **Schema Organization in OneLake**
+### **3.2 Schema Organization in OneLake**
 
 Schemas are created lazily at runtime when dbt models first execute. 
 
@@ -145,14 +118,17 @@ Schemas are created lazily at runtime when dbt models first execute.
 * `test_results` \- Created lazily when first test with `store_failures: true` executes  
   * Contains failed test records for debugging  
   * Tables named: `{test_name}_{timestamp}`  
-  * Cleaned up based on retention policy (default: 7 days  
-* **Elementary** → Stores results of elementary. Created lazily by dbt when the elementary models are run for the first time. 
+  * Cleaned up based on retention policy (default: 7 days)  
+* `elementary` \- Stores data quality metadata and test results  
+  * Created lazily when Elementary models first run  
+  * Tables: `dbt_run_results`, `test_results`, `data_monitoring`, etc.  
+  * Populated during CI/CD runs, not during DAG execution
 
-### **Table Format**
+### **3.3 Table Format**
 
 * All layers use **Delta Lake format** for ACID guarantees and incremental upserts.
 
-### **Bronze Layer**
+### **3.4 Bronze Layer**
 
 * Each table reflects the current state of the bronze.   
 * Its mimics the **source structure** plus standardized ETL control columns:  
@@ -164,21 +140,21 @@ Schemas are created lazily at runtime when dbt models first execute.
 * Airbyte **does not detect hard deletes**. We do not support log based replication in the current release.   
 * **Merge Strategy** → dbt incremental `merge` keyed on `_integration_key` for idempotency.
 
-### **Silver Layer**
+### **3.5 Silver Layer**
 
 * Models defined by developers under `dbt/models/silver/`.  
 * Data is **cleaned, conformed, and joined across sources**.  
 * Consistent naming and typing enforced via macros.  
 * Derived attributes (e.g., customer lifetime value, standard identifiers) introduced here.
 
-### **Gold Layer**
+### **3.6 Gold Layer**
 
 * Models defined under `dbt/models/gold/`.  
 * Data is **aggregated, denormalized, and optimized for BI/analytics**.  
 * Domain-specific marts (finance, marketing, product) with agreed KPIs.  
 * Only layer directly exposed to BI tools / business stakeholders.
 
-### **Medallion Flow**
+### **3.7 Medallion Flow**
 
 * **Straight-through orchestration**: Bronze → Silver → Gold.  
 * Dependencies resolved by dbt’s internal DAG; no manual task wiring.  
@@ -202,7 +178,7 @@ Schemas are created lazily at runtime when dbt models first execute.
 
 ## **5\. Developer Workflow**
 
-### **Source Onboarding Workflow**
+### **5.1 Source Onboarding Workflow**
 
 Onboarding a new source requires two coordinated actions:
 
@@ -223,7 +199,7 @@ Onboarding a new source requires two coordinated actions:
 
 The Airbyte UI/API provides the **operational connector setup**, while the YAML in Git provides the **platform contract** that drives model generation, DAG orchestration, and dbt lineage. Both must be aligned for ingestion to work.
 
-### **Customization Boundaries**
+### **5.2 Customization Boundaries**
 
 The data platform separates **platform-owned components** (delivered via artifacts) from **customer-authored components** (data products). This ensures consistency, protects core logic, and allows safe customization.
 
@@ -278,11 +254,11 @@ client-repo/
 
 ## **7\. CI Process**
 
-**Scope**: This section covers data platform-specific CI logic including Bronze model generation, dbt compilation, and DAG creation.  
-**Pipeline Infrastructure**: For CI/CD runners, triggers, and branching strategy, see CICD Design Section 4\.  
+**Scope**: This section covers data platform-specific CI logic including Bronze model generation, dbt compilation, and DAG creation.   
+**Pipeline Infrastructure**: For CI/CD runners, triggers, and branching strategy, see CICD Design Section 4\.   
 **Authentication**: CI processes use `data_platform` managed identity per Authentication Design Section 6.4.
 
-### **Trigger**
+### **7.1 Trigger**
 
 Runs on every PR that changes:
 
@@ -290,9 +266,9 @@ Runs on every PR that changes:
 - `models/silver/*` (business transformations)  
 - `models/gold/*` (analytical models)
 
-### **Steps**
+### **7.2 Steps**
 
-#### 1\) Validation
+**1\) Validation**
 
 - Validate YAML syntax for all source configs.  
 - Validate source YAML configs \- Schema name matches pattern: bronze\_{source\_name}  
@@ -301,7 +277,7 @@ Runs on every PR that changes:
 - Validate dbt project structure and dependencies (`dbt parse`, `dbt compile`).  
 - Run lightweight dbt ops (e.g., `dbt run-operation` checks) to ensure models can compile.
 
-#### 2\) dbt Autogeneration & Compilation
+**2\) dbt Autogeneration & Compilation**
 
 - **Bronze models** are generated from YAML and written under `dbt/models/bronze/generated/`.  
 - **Bronze tests** are generated in `dbt/models/bronze/generated/schema.yml`:  
@@ -316,7 +292,7 @@ Runs on every PR that changes:
   - `run_results.json` (test execution results when run)  
 - Generate dbt docs artifacts for review (`target/index.html`, `target/catalog.json`).
 
-#### 3\) External Table DDL Generation (Landing → OneLake)
+**3\) External Table DDL Generation (Landing → OneLake)**
 
 - For each source YAML and its streams:  
   - Read the **Airbyte stream schemas** (from the exported `catalog.json` for the connection).  
@@ -336,7 +312,7 @@ Runs on every PR that changes:
   - Validate expected landing path pattern exists (directory probe via build script, best-effort).  
   - **Note:** CI only **generates** these scripts; execution happens in CD.
 
-#### 4\) DAG Generation
+**4\) DAG Generation**
 
 - The **automation program** consumes the YAML (`dag_name`, schedule) and generates **one Cosmos-compatible Airflow DAG per source** with a standard 4-step flow:  
   1. Airbyte sync  
@@ -345,7 +321,7 @@ Runs on every PR that changes:
   4. Gold models (dbt)  
 - Output to `dags/{source_name}_cosmos_dbt_dag.py`.
 
-### **Pull Request Integration**
+### **7.3 Pull Request Integration**
 
 On successful CI, the pipeline **commits the generated code back to the PR**, including:
 
@@ -358,18 +334,18 @@ Reviewers can see developer-authored changes (YAML, Silver/Gold models, custom m
 
 ## **8\. CD Process**
 
-**Scope**: This section covers data platform-specific deployment including OneLake external tables, dbt artifacts, and Cosmos DAGs.  
-**Pipeline Infrastructure**: For deployment pipelines and artifact management, see CICD Design Section 4\.  
+**Scope**: This section covers data platform-specific deployment including OneLake external tables, dbt artifacts, and Cosmos DAGs.   
+**Pipeline Infrastructure**: For deployment pipelines and artifact management, see CICD Design Section 4\.   
 **Authentication**: CD processes use `data_platform` managed identity per Authentication Design Section 6.4.
 
-### **Trigger**
+### **8.1 Trigger**
 
 - Runs on merges to `dev/main`.  
 - Optional: can also be triggered manually for hotfixes.
 
-### **Steps**
+### **8.2 Steps**
 
-#### 1\) Artifact Retrieval
+**1\) Artifact Retrieval**
 
 - Pulls generated artifacts from CI:  
   - `dbt/models/bronze/generated/`  
@@ -377,20 +353,20 @@ Reviewers can see developer-authored changes (YAML, Silver/Gold models, custom m
   - `dags/{source}_cosmos_dbt_dag.py`  
   - `sql/external_tables/{source}/*` (DDL scripts)
 
-#### 2\) Airflow DAG Deployment
+**2\) Airflow DAG Deployment**
 
 - Push Cosmos-generated DAGs to the customer Airflow environment.  
 - DAGs are versioned and placed under `${AIRFLOW_HOME}/dags/`.  
 - Sanity check: `airflow dags list` to confirm DAGs are registered.
 
-#### 3\) dbt Deployment
+**3\) dbt Deployment**
 
 - Sync dbt project (Bronze, Silver, Gold models) to target environment.  
 - Install dependencies (`dbt deps`).  
 - Run smoke test compile (`dbt compile`) to validate environment setup.  
 - dbt execution (full/partial runs) are left to Airflow DAGs — CD only deploys the project.
 
-#### 4\) OneLake External Table Creation
+**4\) OneLake External Table Creation**
 
 - Execute generated T-SQL scripts against Fabric Warehouse / Lakehouse:  
   - `sql/external_tables/{source}/00_create_external_datasource.sql`  
@@ -400,7 +376,7 @@ Reviewers can see developer-authored changes (YAML, Silver/Gold models, custom m
   2. Tables (per stream)  
 - Scripts are idempotent (`IF NOT EXISTS`) → safe to rerun.
 
-#### 5\) Validation & Smoke Tests
+**5\) Validation & Smoke Tests**
 
 - Run post-deploy validations:  
   - Confirm external tables exist in OneLake (`sys.external_tables`).  
@@ -408,7 +384,7 @@ Reviewers can see developer-authored changes (YAML, Silver/Gold models, custom m
   - Confirm dbt project compiles in target environment.  
 - Optional: run a single end-to-end Bronze sync for one source in non-prod before promoting.
 
-#### 6\) Promotion & Rollback
+**6\) Promotion & Rollback**
 
 - Deployments follow standard promotion model (Dev → Test → Prod).  
 - Rollback strategy:  
@@ -416,7 +392,7 @@ Reviewers can see developer-authored changes (YAML, Silver/Gold models, custom m
   - dbt: revert to prior manifest/catalog state.  
   - External tables: drop & recreate using prior schema (backed by versioned DDLs in Git).
 
-### **Outputs**
+### **8.3 Outputs**
 
 - Running Airflow DAGs per source system.  
 - dbt project deployed and ready for execution.  
@@ -429,7 +405,7 @@ Reviewers can see developer-authored changes (YAML, Silver/Gold models, custom m
 **Orchestration**: For Airflow DAG patterns, see Airflow Design.  
 **Authentication**: Runtime uses \`data\_platform\` managed identity per Authentication Design Section 3\.
 
-### Triggering
+### **9.1 Triggering**
 
 - **Airflow DAGs** (Cosmos-generated) define scheduling and dependencies per source.  
 - Typical flow:  
@@ -439,20 +415,28 @@ Reviewers can see developer-authored changes (YAML, Silver/Gold models, custom m
   - dbt Gold models (analytics / consumption layer).  
 - DAGs run on schedule (e.g., cron in YAML config) or on-demand.
 
-### 2\) Landing Zone → External Tables
+### **9.2 Landing Zone → External Tables**
 
 - Airbyte writes **raw Parquet/JSON files** to ADLS landing paths partitioned by ingestion date/hour.  
   Example: `/landing/source-shopify/orders/ingestion_date=2025-09-06/ingestion_hour=04/…`  
 - External tables in OneLake/Fabric (created during CD) point directly to these folders.  
 - Benefit: users can query raw landing data **without waiting for dbt merges**.
 
-### 3\) Observability
+### **9.3 Elementary Execution**
+
+- Runs as final step in each Cosmos DAG (after Gold)  
+- Executes: `dbt run --select elementary`  
+- Generates Elementary report  
+- Uploads to observability storage with DAG run timestamp  
+- See Airflow Design Section 2 for DAG structure
+
+### **9.4 Observability**
 
 - **Airflow** tracks task status (success, fail, retries).  
 - **dbt artifacts** (manifest.json, run results) provide lineage and model status.  
 - **External table smoke checks** (runtime validation queries) confirm new partitions are visible.
 
-### 4\) Error Handling & Recovery
+### **9.5 Error Handling & Recovery**
 
 - **Airbyte**: sync retries and failure alerts; raw data is always persisted to landing.  
 - **dbt**: failed merges don’t overwrite prior tables; safe rollback to last good state.  
@@ -463,7 +447,7 @@ Reviewers can see developer-authored changes (YAML, Silver/Gold models, custom m
 
 dbt provides an auto-generated documentation site (`dbt docs`) that consolidates model definitions, schema lineage, column-level metadata, and test results. This site enables developers and business stakeholders to understand data flows across Bronze, Silver, and Gold layers.
 
-### **Design Principles**
+### **10.1 Design Principles**
 
 - **Single Unified Site**: One dbt project spans Bronze, Silver, and Gold, producing a single dbt docs site with end-to-end visibility.  
 - **Artifact-Backed**: Documentation is generated from the same artifacts produced in CI/CD (`manifest.json`, `catalog.json`, compiled SQL), ensuring exact alignment with the deployed models.  
@@ -473,7 +457,7 @@ dbt provides an auto-generated documentation site (`dbt docs`) that consolidates
   - Silver/Gold: column descriptions, tests, and lineage are defined in `schema.yml` files authored by developers.  
   - All metadata is surfaced automatically in the docs site.
 
-### **Workflow**
+### **10.2 Workflow**
 
 1. Documentation is generated during CI (`dbt docs generate`) alongside other dbt artifacts.  
 2. On deployment, the static documentation site is published to Azure Blob Storage configured for static hosting.

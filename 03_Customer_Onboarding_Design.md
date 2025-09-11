@@ -11,14 +11,14 @@ Prerequisites are divided into two categories:
 
 ## **2\. Bootstrap Prerequisites**
 
-### **Azure Foundation (Assumed to Exist)**
+### **2.1 Azure Foundation (Assumed to Exist)**
 
-#### **Tenant & Subscriptions**
+#### **2.1.1 Tenant & Subscriptions**
 
 - Azure tenant with active subscriptions for dev and prod environments  
 - Azure tenant ID and subscription IDs
 
-#### Service Principals
+#### **2.1.2** Service Principals
 
 - **Fabric Service Principal**  
   - Name: `{customer}-fabric-sp`  
@@ -33,7 +33,7 @@ Prerequisites are divided into two categories:
   - Purpose: Git synchronization  
   - Created by: Customer admin in their tenant
 
-#### **Azure DevOps**
+#### **2.1.3 Azure DevOps**
 
 - Azure DevOps organization URL  
 - Azure DevOps project name  
@@ -42,7 +42,7 @@ Prerequisites are divided into two categories:
   - Create and configure pipelines  
   - Create variable groups
 
-### **Microsoft Fabric (Assumed to Exist)**
+### **2.2 Microsoft Fabric (Assumed to Exist)**
 
 - **Fabric tenant enabled** for the organization  
 - **Fabric capacity purchased** (F64 or higher recommended)  
@@ -53,7 +53,7 @@ Prerequisites are divided into two categories:
 - **Capacity resource ID** available for configuration  
 - **Note:** See Data Platform Design Section 2 for Fabric architecture and provisioning details
 
-### **Hub Infrastructure (Assumed to Exist)**
+### **2.3 Hub Infrastructure (Assumed to Exist)**
 
 - Hub VNet with Azure Firewall  
 - **Log Analytics Workspace in hub**  
@@ -63,12 +63,12 @@ Prerequisites are divided into two categories:
 - Private DNS zones in hub  
 - Firewall configured with required outbound rules
 
-### **Access Requirements** 
+### **2.4 Access Requirements** 
 
 - Service provider guest user access to customer's Azure tenant (for Cloud Shell execution)  
 - Credentials for all service principals
 
-### **Policy Review (Manual Process)**
+### **2.5 Policy Review (Manual Process)**
 
 Customer must provide before bootstrap:
 
@@ -80,8 +80,6 @@ Customer must provide before bootstrap:
 **Note:** Automated policy discovery and conflict resolution planned for future release. Currently requires manual review and coordination with customer's cloud governance team.
 
 ## **3\. Bootstrap Process**
-
-### **Phase Flow**
 
 ```
 ┌──────────────────────┐
@@ -146,7 +144,7 @@ Customer must provide before bootstrap:
 
 After bootstrap completes, the following configuration is provided via terraform.tfvars files. These are NOT prerequisites but deployment-time parameters.
 
-### **Configuration Structure**
+### **4.1 Configuration Structure**
 
 ```
 /infrastructure/environments/{env}/
@@ -159,9 +157,9 @@ After bootstrap completes, the following configuration is provided via terraform
     └── governance.tfvars        # Optional: Retention, budgets (has defaults)
 ```
 
-### **Required Configuration Files**
+### **4.2 Required Configuration Files**
 
-#### **terraform.tfvars**
+#### **4.2.1 terraform.tfvars**
 
 ```
 # Customer Identity (all fields required)
@@ -170,7 +168,7 @@ environment = "dev"  # or "prod"
 primary_location = "eastus"
 ```
 
-#### **config/platform.tfvars**
+#### **4.2.2 config/platform.tfvars**
 
 ```
 # Platform Version (required)
@@ -186,7 +184,7 @@ mandatory_tags = {
 }
 ```
 
-#### **config/network.tfvars**
+#### **4.2.3 config/network.tfvars**
 
 ```
 # VNet Configuration (all fields required)
@@ -199,7 +197,7 @@ network = {
 }
 ```
 
-#### **config/connectivity.tfvars**
+#### **4.2.4 config/connectivity.tfvars**
 
 ```
 # Hub Integration (all fields required)
@@ -211,9 +209,9 @@ fabric_capacity_resource_id = "/subscriptions/.../resourceGroups/.../providers/M
 hub_vnet_resource_id = "/subscriptions/.../resourceGroups/.../providers/Microsoft.Network/virtualNetworks/..."
 ```
 
-### **Optional Configuration Files**
+### **4.3 Optional Configuration Files**
 
-#### **config/05\_compute.tfvars**
+#### **4.3.1 config/05\_compute.tfvars**
 
 ```
 # Container Runtime Configuration
@@ -261,21 +259,40 @@ container_resources = {
 }
 ```
 
-#### **config/02\_governance.tfvars**
+#### **4.3.2 config/02\_governance.tfvars**
 
 ```
 # Data Retention (optional - defaults shown)
 data_retention = {
+  # OneLake medallion layers
   onelake = {
     bronze_years = 1
-    silver_years = 3
+    silver_years = 7
     gold_years = 7
   }
+  
+  # ADLS landing zone
   landing_zone = {
     delete_after_days = 90
   }
+  
+  # Observability storage (append pattern with timestamps)
+  observability = {
+    elementary_reports_days = 30
+    dbt_run_artifacts_days = 30  # manifest.json, run_results.json per run
+  }
+  
+  # Terraform state (version-based, not time-based)
+  state = {
+    versions_to_keep = 30
+  }
+  
+  # NO RETENTION NEEDED FOR:
+  # - dbt docs (overwritten, latest only)
+  # - DAGs (regenerated from YAML, overwritten)
+  # - Platform artifacts cache (can re-download from Azure Artifacts)
 }
-
+  
 # Budget Monitoring (optional - defaults shown)
 # All budgets log to hub LAW, no email notifications in current phase
 subscription_budget = {
@@ -317,7 +334,7 @@ resource_budgets = {
 
 ## **5\. Post-Deployment Manual Steps**
 
-### 5.1 Network Integration
+### **5.1 Network Integration**
 
 See Infrastructure Design Section 2.7 for detailed procedures:
 
@@ -327,7 +344,7 @@ See Infrastructure Design Section 2.7 for detailed procedures:
 - Verify firewall rules  
 - Test connectivity
 
-### 5.2 Authentication Verification
+### **5.2 Authentication Verification**
 
 **CI/CD Runner Managed Identity:**
 
@@ -349,7 +366,7 @@ See Infrastructure Design Section 2.7 for detailed procedures:
   - Storage Blob Data Contributor on data storage accounts  
   - Key Vault Secrets User for runtime secrets
 
-### 5.3 Policy Compliance Verification
+### **5.3 Policy Compliance Verification**
 
 **Manual Steps Required:**
 
@@ -367,7 +384,7 @@ See Infrastructure Design Section 2.7 for detailed procedures:
 - Tag inheritance from management groups may conflict  
 - Resolution requires manual exemption creation or policy modification
 
-### 5.4 Log Retention Verification
+### **5.4 Log Retention Verification**
 
 **Customer Action Required:**
 
@@ -380,7 +397,7 @@ See Infrastructure Design Section 2.7 for detailed procedures:
 
 ## **6\. Bootstrap Implementation Details**
 
-### **Phase 1: Environment Preparation**
+### **6.1 Phase 1: Environment Preparation**
 
 **Actions:**
 
@@ -399,7 +416,7 @@ See Infrastructure Design Section 2.7 for detailed procedures:
 - Connectivity tested  
 - Tenant policies validated and no conflicts found. 
 
-### **Phase 2: Bootstrap Infrastructure**
+### **6.2 Phase 2: Bootstrap Infrastructure**
 
 **Resources Created:**
 
@@ -427,7 +444,7 @@ devops-project-name
 
 **Note:** A managed identity named `data_platform` is created during deployment (not during bootstrap) to handle all runtime data operations.
 
-### **Phase 3: Repository Setup**
+### **6.3 Phase 3: Repository Setup**
 
 **Repository Structure Created:**
 
@@ -450,7 +467,7 @@ devops-project-name
     └── pipelines/
 ```
 
-### **Phase 4: Development Environment Deployment**
+### **6.4 Phase 4: Development Environment Deployment**
 
 **Deployment Sequence:**
 
@@ -473,7 +490,7 @@ devops-project-name
 - Expected result: Empty list  
 - If roles remain: Manual cleanup required before proceeding
 
-### **Phase 5: Credential Migration**
+### **6.5 Phase 5: Credential Migration**
 
 **Migration Steps:**
 
@@ -482,7 +499,7 @@ devops-project-name
 3. Update Azure DevOps variable groups to use runner MI for authentication  
 4. Validate runner MI can retrieve SP credentials from Key Vault
 
-### **Phase 6: Bootstrap Cleanup**
+### **6.6 Phase 6: Bootstrap Cleanup**
 
 **Cleanup Steps:**
 
@@ -493,7 +510,7 @@ devops-project-name
 
 ## **7\. Failure Recovery**
 
-### **Recovery Matrix**
+### **7.1 Recovery Matrix**
 
 | Failure Point | Recovery Action | Data Loss Risk |
 | :---- | :---- | :---- |
@@ -512,7 +529,7 @@ Phase 4: Dev Deploy: Dev Deployment failure on Fabric Creation
 | Permission assignment fails | Fabric SP re-runs permission grant | dbt/Airflow cannot connect until fixed  |
 | Lakehouse creation fails | Delete workspace, restart Phase 4 | Full re-deployment needed |
 
-### **Complete Rollback Process**
+### **7.2 Complete Rollback Process**
 
 1. Delete bootstrap resource group (removes all bootstrap resources)  
 2. Remove Azure DevOps repository if created  
@@ -521,14 +538,14 @@ Phase 4: Dev Deploy: Dev Deployment failure on Fabric Creation
 
 ## **8\. Deliverables**
 
-### **Bootstrap Outputs**
+### **8.1 Bootstrap Outputs**
 
 - Bootstrap completion report with timestamps  
 - Resource identifiers for all created resources  
 - Repository and pipeline URLs  
 - Validation status for each component
 
-### **Customer Handoff Package**
+### **8.2 Customer Handoff Package**
 
 1. **Access Guide** \- URLs, authentication methods, and procedures  
 2. **Architecture Diagram** \- Visual representation of deployed infrastructure  
@@ -539,7 +556,7 @@ Phase 4: Dev Deploy: Dev Deployment failure on Fabric Creation
 
 ## **9\. Day-2 Operations**
 
-### **Customer Responsibilities Post-Handoff**
+### **9.1 Customer Responsibilities Post-Handoff**
 
 1. Complete manual network integration steps  
 2. Configure user access to Fabric workspace  
@@ -547,7 +564,7 @@ Phase 4: Dev Deploy: Dev Deployment failure on Fabric Creation
 4. Develop Silver and Gold dbt models  
 5. Monitor costs and adjust scaling as needed
 
-### **Production Deployment**
+### **9.2 Production Deployment**
 
 Production deployment follows the standard CI/CD workflow:
 
@@ -559,21 +576,21 @@ Production deployment follows the standard CI/CD workflow:
 
 ## **10\. Security Considerations**
 
-### **During Bootstrap**
+### **10.1 During Bootstrap**
 
 - All secrets stored in bootstrap Key Vault with audit logging  
 - No secrets in code or logs  
 - Bootstrap resources in isolated resource group  
 - Network isolated with NSGs
 
-### **Post-Bootstrap**
+### **10.2 Post-Bootstrap**
 
 - Secrets in operational Key Vault only (Fabric SP, DevOps SP)  
 - Bootstrap secrets deleted with resource group  
 - Access via managed identities (runner MI and data\_platform MI)  
 - No deployment SP to rotate or manage
 
-### **Compliance**
+### **10.3 Compliance**
 
 - All actions logged for audit trail  
 - Resource creation tracked  

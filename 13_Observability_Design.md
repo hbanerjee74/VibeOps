@@ -18,38 +18,9 @@ This document establishes foundational observability infrastructure by deploying
 
 ### **1.1 Observability Data Flow Architecture**
 
-```mermaid
-graph TD
-    %% Style definitions
-    classDef policyClass fill:#FF6B6B,stroke:#333,stroke-width:2px,color:#fff
-    classDef serviceClass fill:#4A5568,stroke:#333,stroke-width:2px,color:#fff
-    classDef collectorClass fill:#FFA500,stroke:#333,stroke-width:2px,color:#000
-    classDef centralClass fill:#00C853,stroke:#333,stroke-width:2px,color:#fff
-    
-    %% Top Layer - Policy
-    Policy[Azure Policy - Diagnostic Settings Enforcement]:::policyClass
-    
-    %% Services Layer
-    Policy --> Svc1[Container Workloads<br/>Airbyte • dbt • CI/CD]:::serviceClass
-    Policy --> Svc2[Azure PaaS Services<br/>PostgreSQL • KeyVault • ADLS • ACR • NSG]:::serviceClass
-    Policy --> Svc3[Data Platform Services<br/>Managed Airflow • Fabric • OneLake]:::serviceClass
-    Policy --> Cost[Azure Cost Management]:::serviceClass
-    
-    %% Collection Methods
-    Svc1 --> CI[Container Insights<br/>Logs • Metrics • Events]:::collectorClass
-    Svc2 --> DS[Diagnostic Settings<br/>Resource Metrics • Operation Logs]:::collectorClass
-    Svc3 --> AM[Native Azure Monitor<br/>& Fabric Workspace APIs]:::collectorClass
-    Cost --> CE[Cost Exports<br/>Budget Alerts]:::collectorClass
-    
-    %% Central Hub
-    CI --> LAW[Log Analytics Workspace<br/>Customer Hub]:::centralClass
-    DS --> LAW
-    AM --> LAW
-    CE --> LAW
-    
-    %% Monitoring Layer
-    LAW --> Monitor[Azure Monitor Dashboards & Application Insights]:::centralClass
-```
+![graph TD    %% Style definitions    classDef policyClass fill:\#FF6B6B,stroke:\#333,stroke-width:2px,color:\#fff    classDef serviceClass fill:\#4A5568,stroke:\#333,stroke-width:2px,color:\#fff    classDef collectorClass fill:\#FFA500,stroke:\#333,stroke-width:2px,color:\#000    classDef centralClass fill:\#00C853,stroke:\#333,stroke-width:2px,color:\#fff        %% Top Layer - Policy    Policy\[Azure Policy - Diagnostic Settings Enforcement\]:::policyClass        %% Services Layer    Policy --\> Svc1\[Container Workloads\<br/\>Airbyte • dbt • CI/CD\]:::serviceClass    Policy --\> Svc2\[Azure PaaS Services\<br/\>PostgreSQL • KeyVault • ADLS • ACR • NSG\]:::serviceClass    Policy --\> Svc3\[Data Platform Services\<br/\>Managed Airflow • Fabric • OneLake\]:::serviceClass    Policy --\> Cost\[Azure Cost Management\]:::serviceClass        %% Collection Methods    Svc1 --\> CI\[Container Insights\<br/\>Logs • Metrics • Events\]:::collectorClass    Svc2 --\> DS\[Diagnostic Settings\<br/\>Resource Metrics • Operation Logs\]:::collectorClass    Svc3 --\> AM\[Native Azure Monitor\<br/\>& Fabric Workspace APIs\]:::collectorClass    Cost --\> CE\[Cost Exports\<br/\>Budget Alerts\]:::collectorClass        %% Central Hub    CI --\> LAW\[Log Analytics Workspace\<br/\>Customer Hub\]:::centralClass    DS --\> LAW    AM --\> LAW    CE --\> LAW        %% Monitoring Layer    LAW --\> Monitor\[Azure Monitor Dashboards & Application Insights\]:::centralClass][image1]
+
+**Note:** Log retention is controlled by the customer's hub LAW configuration. Elementary reports are stored with timestamp paths to maintain history in observability storage with platform-managed retention (30 days default, configurable in governance.tfvars).
 
 ### **1.2 Data Platform Observability**
 

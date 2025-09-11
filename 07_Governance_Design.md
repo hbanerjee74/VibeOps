@@ -32,8 +32,6 @@ This document outlines the governance strategy for the VibeOps data platform dep
 
 ## **3\. Tagging Standards**
 
-### **Mandatory Tags (Required)**
-
 All resources must have these five tags:
 
 | Tag | Purpose | Example |
@@ -48,7 +46,7 @@ Tags are enforced via Azure Policy with Deny effect \- resources cannot be creat
 
 ## **4\. Azure Policy Framework**
 
-### **Platform Base Policies (Non-Negotiable)**
+### **4.1 Platform Base Policies (Non-Negotiable)**
 
 These nine essential policies are applied to all spoke subscriptions:
 
@@ -64,7 +62,7 @@ These nine essential policies are applied to all spoke subscriptions:
 | **Restrict Resource Locations** | Deny | Limit to allowed regions |
 | **Require Diagnostic Settings** | DeployIfNotExists | Send logs to hub LAW |
 
-### **Customer Custom Policies**
+### **4.2 Customer Custom Policies**
 
 Customers can add additional policies that are more restrictive. Custom policies:
 
@@ -85,8 +83,6 @@ Budget thresholds can be customized in `governance.tfvars` if defaults need adju
 
 ## **6\. Microsoft Fabric Governance**
 
-### **Workspace Management**
-
 Fabric governance is limited to basic workspace setup:
 
 1. **Workspace Creation:** Created via Terraform with capacity assignment  
@@ -97,13 +93,13 @@ Advanced Fabric governance (sensitivity labels, Purview integration) is left to 
 
 ## **7\. Compliance Monitoring**
 
-### **Policy Compliance**
+### **7.1 Policy Compliance**
 
 - Azure Policy dashboard shows compliance status  
 - Non-compliant resources are blocked at creation  
 - Diagnostic logs sent to hub LAW for audit trail
 
-### **Manual Validation**
+### **7.2 Manual Validation**
 
 - Run `terraform plan` to detect configuration drift  
 - Review Azure Policy compliance in Azure Portal  
@@ -111,7 +107,7 @@ Advanced Fabric governance (sensitivity labels, Purview integration) is left to 
 
 ## **8\. Customer Customization**
 
-### **What Customers Can Customize**
+### **8.1 What Customers Can Customize**
 
 - Add more restrictive Azure Policies  
 - Adjust container sizing in `compute.tfvars`  
@@ -119,7 +115,7 @@ Advanced Fabric governance (sensitivity labels, Purview integration) is left to 
 - Change budget thresholds in `governance.tfvars`  
 - Add optional tags beyond the 5 mandatory ones
 
-### **What Customers Cannot Change**
+### **8.2 What Customers Cannot Change**
 
 - Platform base policies (9 essential policies)  
 - Mandatory tag requirements (5 tags)  

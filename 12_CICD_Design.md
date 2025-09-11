@@ -12,14 +12,14 @@ Core design principles:
 
 ## **1\. Repository Architecture**
 
-### **Repository Structure Overview**
+### **1.1 Repository Structure Overview**
 
 | Repository | Purpose | Key Components | Who Uses |
 | :---- | :---- | :---- | :---- |
 | **Service Central** | Platform development & artifact creation | Templates, Platform components, Configuration definitions, Artifact management | **VibeOps developers** |
 | **Client** | Client-specific deployments using artifacts | Infrastructure modules, Data products, Local artifacts, Environment configurations | **Client teams** |
 
-### **Service Central Repository**
+### **1.2 Service Central Repository**
 
 ```
 /templates/
@@ -61,7 +61,7 @@ Core design principles:
 /examples/                 # Client usage examples
 ```
 
-### **Client Repository**
+### **1.3 Client Repository**
 
 ```
 /infrastructure/
@@ -127,9 +127,9 @@ Core design principles:
 # that attempt to modify platform-owned or auto-generated files.
 ```
 
-### **Development Workflow**
+### **1.4 Development Workflow**
 
-#### Service Central Repository (VibeOps Development Environment)
+**Service Central Repository (VibeOps Development Environment)**
 
 - **Code Development** → Write/modify templates, configs, and platform components  
 - **Testing** → Run unit, integration, and e2e tests  
@@ -139,7 +139,7 @@ Core design principles:
 
 **Flow:** Service Central develops → packages artifacts → publishes to feed → Clients download
 
-#### Client Repository (Customer Environment)
+**Client Repository (Customer Environment)**
 
 - **Artifact Download** → Pull latest platform artifacts from Azure Artifacts feeds  
 - **Local Configuration** → Update `terraform.tfvars` with environment-specific settings  
@@ -158,7 +158,7 @@ Core design principles:
 
 ## 3\. Branching Model
 
-### **Branching Strategy**
+### **3.1 Branching Strategy**
 
 Both Service Central and Client repositories use the same simple pattern:
 
@@ -175,9 +175,9 @@ Both Service Central and Client repositories use the same simple pattern:
 * CI/CD deploys main branch to **Production**.  
 * Hotfixes are branched from main, applied, and merged back into both main and dev.
 
-### **CI/CD Trigger Strategy**
+### **3.2 CI/CD Trigger Strategy**
 
-#### Service Central Repository
+#### 3.2.1 Service Central Repository
 
 | Branch | CI/CD Actions |
 | :---- | :---- |
@@ -186,7 +186,7 @@ Both Service Central and Client repositories use the same simple pattern:
 | `main` | Full CI pipeline. Artifacts published to **production feed**. |
 | `hotfix/*` | CI validation only. On merge → follows same rules as target branch. |
 
-#### Client Repository
+#### 3.2.2 Client Repository
 
 | Branch | CI/CD Actions |
 | :---- | :---- |
@@ -195,7 +195,7 @@ Both Service Central and Client repositories use the same simple pattern:
 | `main` | Full deployment to **Production environment**. Post-deployment validation. |
 | `hotfix/*` | CI validation only. On merge to `main` → Prod deployment triggered. |
 
-### **Flow Summary**
+### **3.3 Flow Summary**
 
 ```
 Service Central Repo
@@ -209,7 +209,7 @@ Client Repo
  └─ main      → Deploy to Production environment
 ```
 
-### **Security Validation**
+### **3.4 Security Validation**
 
 - **Secret Detection:** `gitleaks` integrated into CI pipelines to prevent credential exposure.  
 - **PR Validation:** All pull requests scanned for secrets before merge approval.  
@@ -218,9 +218,9 @@ Client Repo
 
 ## **4\. Workflow Implementations**
 
-### **Artifact Version Control (Azure Artifacts Feeds)**
+### **4.1 Artifact Version Control (Azure Artifacts Feeds)**
 
-#### Versioning Strategy
+#### 4.1.1 Versioning Strategy
 
 - The **entire platform package** (Terraform modules, dbt containers, Airflow templates, governance policies) is versioned as **one unit**.  
 - Semantic Versioning (`MAJOR.MINOR.PATCH`):  
@@ -228,13 +228,13 @@ Client Repo
   - **MINOR** – Backward-compatible feature additions (e.g., new module, new dbt macro)  
   - **PATCH** – Bug fixes and non-breaking improvements
 
-#### Artifact Publishing (Service Central)
+#### 4.1.2 Artifact Publishing (Service Central)
 
 - Merge to `main` in Service Central triggers:  
   - Build & package **full platform bundle**  
   - Publish bundle to **Azure Artifacts feed** under a new semantic version (immutable)
 
-#### Artifact Consumption (Client Repository)
+#### 4.1.3 Artifact Consumption (Client Repository)
 
 - Client repos consume a **single versioned bundle**.  
 - Pinned in `01_platform.tfvars`:
@@ -244,33 +244,32 @@ Client Repo
 platform_version = "3.1.0"
 ```
 
-#### Upgrade Workflow
+#### 4.1.4 Upgrade Workflow
 
 * Service Central releases new platform version (e.g., 3.2.0)  
 * Client upgrades by changing **only one variable** (platform\_version) in a PR  
 * CI Validation checks:  
   * terraform init/plan with new bundle  
   * dbt compilation (dbt compile, Cosmos DAG regeneration)  
-  * Policy compliance validation
+  * Policy compliance validation  
+* Merge to main → CD deploys new platform to target environment
 
-* #### Merge to main → CD deploys new platform to target environment
-
-#### Rollback Workflow
+#### 4.1.5 Rollback Workflow
 
 * Rollback \= revert platform\_version to previous known-good version  
 * All historical versions remain available in Azure Artifacts feed  
 * Deployment uses validated previous artifact without modification
 
-#### Traceability
+#### 4.1.6 Traceability
 
 * Each deployment logs:  
   * platform\_version deployed  
   * Client repository commit SHA  
 * Stored in /artifacts/metadata/ for compliance, auditing, and rollback provenance
 
-### **Client Repository Workflows**
+### **4.2 Client Repository Workflows**
 
-#### Infrastructure Workflow
+#### 4.2.1 Infrastructure Workflow
 
 **Authentication**: CI processes use `data_platform` managed identity per Authentication Design Section 6.4.
 
@@ -295,7 +294,7 @@ platform_version = "3.1.0"
   - Outputs stored in state files per environment in secure backend (e.g., Azure Storage \+ Key Vault).  
   - Notify stakeholders of applied infrastructure changes.
 
-#### Data Platform Workflow
+#### 4.2.2 Data Platform Workflow
 
 **Authentication**: CD processes use `data_platform` managed identity per Authentication Design Section 6.4.
 
@@ -323,7 +322,7 @@ platform_version = "3.1.0"
 
 **Note**: This section defines pipeline triggers and infrastructure. The data-specific logic is documented in Data Platform Design Sections 7-8.
 
-#### Governance & Security Workflow
+#### 4.2.3 Governance & Security Workflow
 
 - **Trigger**:  
   - Changes to `02_governance.tfvars` (policies, tags, budgets, retention).  
@@ -339,33 +338,40 @@ platform_version = "3.1.0"
   - Fail deployment if secret scanning fails.  
   - Notify governance/security teams on applied changes.
 
-#### Data Product Workflow
+#### 4.2.4 Data Platform Workflow
 
-- **Trigger**:  
-  - Changes to `/dbt/models/silver/*` (business logic).  
-  - Changes to `/dbt/models/gold/*` (analytical models).  
-  - Changes to `/airbyte/` (source-specific YAML configs).  
-- **CI Steps**:  
-  - Validate source YAML configs.  
-  - dbt compile with dependency resolution against Bronze.  
-  - Run dbt tests on affected models.  
-  - Validate lineage consistency (e.g., Silver models depend only on Bronze).  
-  - Regenerate Cosmos DAGs to reflect new/updated sources and downstream models.  
-  - Regenerate dbt docs with updated lineage and metadata.  
-- **CD Steps**:  
-  - Deploy updated dbt models (Silver \+ Gold) into blob storage as artifacts.  
-  - Deploy regenerated Cosmos DAGs to Airflow.  
-  - Deploy refreshed dbt docs site to blob storage.  
-  - End-to-end orchestration ensures straight-through execution:  
-    Bronze → Silver → Gold.
+**Authentication**: CI processes use `data_platform` managed identity per Authentication Design Section 6.4.
+
+**Trigger**:
+
+- Changes to `01_platform.tfvars` (artifact versions)  
+- Changes to `dbt_project.yml and profiles.yml` (dbt runtime configs)  
+- Changes under `/data-platform/` (dbt configs, Airflow settings, Airbyte configs)
+
+**CI Steps**: See Data Platform Design Section 7 for detailed data-specific CI process including:
+
+- Bronze model generation  
+- dbt compilation and artifact creation  
+- External table DDL generation  
+- Cosmos DAG generation
+
+**CD Steps**: See Data Platform Design Section 8 for detailed deployment process including:
+
+- OneLake external table creation  
+- dbt artifact deployment  
+- Cosmos DAG deployment to Airflow  
+- Data platform validation
 
 **Note on Data Quality (Elementary)**
 
-- All dbt workflows (PR and environment runs) execute `dbt build/test`, which includes **Elementary** package tests by default.  
-- On environment runs, publish the **Elementary report** (HTML/JSON) and dbt artifacts (manifest/run\_results/catalog) as build artifacts and upload them to the tenant’s observability path (see *Observability Design* for storage & retention).  
-- Pipelines **fail** on test failures according to dbt/Elementary severity settings. 
+- All dbt workflows (PR and environment runs) execute `dbt build/test`, which includes Elementary package tests by default.  
+- On environment runs, Elementary reports and dbt artifacts are uploaded to observability storage.  
+- See Data Platform Design Section 9 for runtime Elementary execution details.  
+- See Observability Design for storage patterns and retention policies.
 
-#### Utility & Scripts Workflow
+**Note**: This section defines pipeline triggers and infrastructure. The data-specific logic is documented in Data Platform Design Sections 7-8.
+
+#### 4.2.5 Utility & Scripts Workflow
 
 - **Trigger**:  
   - Changes to `/scripts/` (automation helpers) or `/examples/` (reference templates).  
@@ -394,7 +400,7 @@ gh pr create --title "ROLLBACK: Templates to v1.2.0"
 
 ## **6\. CI/CD Runners**
 
-### **Runner Architecture**
+### **6.1 Runner Architecture**
 
 - **Identity Model**  
   - Runners use dedicated managed identity: `{customer}-{env}-cicd-runner-mi`  
@@ -408,14 +414,14 @@ gh pr create --title "ROLLBACK: Templates to v1.2.0"
   - Storage Blob Data Contributor (artifacts)  
   - Log Analytics Metrics Publisher (telemetry)
 
-### **Runner Authentication Flow**
+### **6.2 Runner Authentication Flow**
 
 1. Container starts with managed identity assigned  
 2. MI authenticates to Azure (no secrets needed)  
 3. For external services, MI retrieves SP credentials from Key Vault  
 4. All Terraform operations use MI directly
 
-### **Agent Capabilities**
+### **6.3 Agent Capabilities**
 
 - **Pre-installed Tools**  
   - Terraform (pinned version via artifacts)  
@@ -427,7 +433,7 @@ gh pr create --title "ROLLBACK: Templates to v1.2.0"
   - Resources: 2 vCPU, 4GB RAM (tunable)  
   - Azure Files mount for workspace persistence
 
-### **Observability Integration**
+### **6.4 Observability Integration**
 
 Runner containers integrate with existing observability infrastructure per Observability Design, using Azure Monitor Container Insights for telemetry collection.
 
@@ -437,7 +443,7 @@ This section defines the automation utilities that implement VibeOps platform's 
 
 **Note**: These automation utilities are planned for phase 2\. Manual generation in Phase 1 allows validation of patterns before full automation in Phase 2\. 
 
-### **Hybrid Generation Architecture**
+### **7.1 Hybrid Generation Architecture**
 
 The platform separates concerns between:
 
@@ -451,7 +457,7 @@ This separation ensures:
 - Infrastructure tools remain declarative and simple  
 - Clear boundaries between platform and client customization
 
-### **Core Generation Utilities**
+### **7.2 Core Generation Utilities**
 
 | Utility | Purpose | Inputs | Outputs |
 | :---- | :---- | :---- | :---- |
@@ -460,8 +466,9 @@ This separation ensures:
 | **External Table Generator** | Creates DDL for landing → OneLake | Airbyte catalog.json \+ YAML | `sql/external_tables/*.sql` |
 | **Schema Drift Detector** | Compares source vs destination schemas | Airbyte API \+ OneLake metadata | Drift report \+ alerts |
 | **Config Validator** | Validates YAML against schemas | `airbyte_sources/*.yml` | Validation report |
+| **Observability Artifact Publisher** | Uploads Elementary reports and dbt artifacts with proper timestamp paths | `Elementary report files (HTML/JSON) dbt artifacts (manifest.json, run_results.json, catalog.json) Run context (DAG_RUN_ID or CI_COMMIT_SHA)` | Uploaded to: {customer}{env}observst Path pattern: /{report\_type}/{YYYY-MM-DD}/{RUN\_ID}/files  |
 
-### **Utility Architecture**
+### **7.3 Utility Architecture**
 
 All utilities follow these design principles:
 
@@ -471,9 +478,9 @@ All utilities follow these design principles:
 - **Container-Executed**: Run within CI/CD containers using `data_platform` managed identity  
 - **Dry-Run Support**: Support validation mode without artifact generation
 
-### **Required Automation Utilities**
+### **7.4 Required Automation Utilities**
 
-#### **YAML-to-Bronze Generator**
+#### **7.4.1 YAML-to-Bronze Generator**
 
 **Purpose**: Automates Bronze dbt model generation from Airbyte source configurations
 
@@ -504,7 +511,7 @@ Operations:
 - Cursor field required for incremental processing  
 - No manual edits allowed in generated files
 
-#### **Cosmos DAG Generator**
+#### **7.4.2 Cosmos DAG Generator**
 
 **Purpose**: Creates per-source Airflow DAGs from YAML configurations
 
@@ -538,7 +545,7 @@ Operations:
 - Tags models appropriately for selective execution  
 - Maintains single DAG per source principle
 
-#### **External Table DDL Generator**
+#### **7.4.3 External Table DDL Generator**
 
 **Purpose**: Creates T-SQL scripts for registering ADLS landing files as OneLake external tables
 
@@ -575,7 +582,7 @@ Operations:
 - Targets bronze schema by default  
 - Supports hourly partitioning structure
 
-#### **Airbyte Metadata Extractor**
+#### **7.4.4 Airbyte Metadata Extractor**
 
 **Purpose**: Extracts configured Airbyte connections to generate initial source YAML
 
@@ -606,7 +613,7 @@ Operations:
 3. Reviews and adjusts YAML if needed  
 4. Commits to Git for CI/CD processing
 
-#### **Platform Artifact Packager**
+#### **7.4.5 Platform Artifact Packager**
 
 **Purpose**: Packages and versions platform components for distribution
 
@@ -638,7 +645,7 @@ Operations:
 - MINOR: New features (new module, new macro)  
 - PATCH: Bug fixes and improvements
 
-#### **Configuration Validator Suite**
+#### **7.4.6 Configuration Validator Suite**
 
 **Purpose**: Validates all configuration files before generation and deployment
 
@@ -675,9 +682,49 @@ Components:
    - Resource location restrictions
 ```
 
-### **Utility Execution Context**
+#### **7.4.7 Observability Artifact Publisher**
 
-#### **CI Pipeline Integration**
+**Purpose**: Uploads Elementary reports and dbt artifacts with proper timestamp paths
+
+**References**:
+
+- Storage location: Infrastructure Design Section 4 (observability storage)  
+- Execution context: Data Platform Design Section 9 (Runtime Processing)  
+- Retention rules: Customer Onboarding Section 4 (governance.tfvars)
+
+**Functionality**:
+
+```
+Input:
+
+Elementary report files (HTML/JSON)
+dbt artifacts (manifest.json, run_results.json, catalog.json)
+Run context (DAG_RUN_ID or CI_COMMIT_SHA)
+
+Output:
+
+Uploaded to: {customer}{env}observst
+Path pattern: /{report_type}/{YYYY-MM-DD}/{RUN_ID}/files
+
+Operations:
+
+Parse run context for timestamp and ID
+Create date-based folder structure
+Upload files with proper paths for lifecycle policies
+Log upload locations for troubleshooting
+Validate retention metadata tags
+```
+
+**Usage Pattern**:
+
+1. Called from Airflow DAG after Elementary execution  
+2. Called from CI/CD pipeline after environment test runs  
+3. Uses `data_platform` managed identity for authentication  
+4. Ensures append-only pattern (never overwrites)
+
+### **7.5. Utility Execution Context**
+
+#### **7.5.1 CI Pipeline Integration**
 
 **Execution Order**:
 
@@ -688,7 +735,7 @@ Components:
 5. Secret scanner (gitleaks) on all changes  
 6. Platform Artifact Packager (Service Central only)
 
-#### **CD Pipeline Integration**
+#### **7.5.2 CD Pipeline Integration**
 
 **Execution Order**:
 
@@ -696,7 +743,7 @@ Components:
 2. Execute external table DDL scripts  
 3. Validate deployment success
 
-### **Utility Distribution**
+### **7.6 Utility Distribution**
 
 **Packaging**:
 
@@ -720,14 +767,14 @@ Pre-installed:
 Authentication: data_platform managed identity
 ```
 
-### **Error Handling and Logging**
+### **7.7 Error Handling and Logging**
 
 - All utilities log to stdout in JSON format  
 - Include operation context and timing  
 - Log validation results before generation  
 - Capture dry-run vs actual execution mode
 
-### **Maintenance and Updates**
+### **7.8 Maintenance and Updates**
 
 **Update Process**:
 

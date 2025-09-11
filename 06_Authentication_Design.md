@@ -13,7 +13,7 @@ This document defines the authentication architecture for the VibeOps data platf
 
 ## **2\. Authentication Types**
 
-### Azure AD-Based Authentication
+### **2.1 Azure AD-Based Authentication**
 
 **Managed Identities**: Used for Azure resource-to-resource authentication where supported  
 **Service Principals**: Used for Azure services that don't support managed identities:
@@ -22,7 +22,7 @@ This document defines the authentication architecture for the VibeOps data platf
 - Azure DevOps Git repository access  
 - CI/CD pipeline authentication
 
-### External Service Credentials
+### **2.2 External Service Credentials**
 
 **OAuth Credentials**: Used for services like Salesforce, requiring client ID, secret, and refresh tokens  
 **API Keys**: Used for services like Shopify, Stripe, SendGrid  
@@ -68,14 +68,14 @@ A single user-assigned managed identity provides authentication for all platform
 
 Service principals are only required for external services that don't support managed identity authentication.
 
-### Required Service Principals
+### **4.1 Required Service Principals**
 
 | Service Principal | Permissions | Used By | Lifecycle |
 | :---- | :---- | :---- | :---- |
 | `{customer}-fabric-sp` | Fabric workspace admin rights | CI/CD Runner MI for Fabric API operations | Persistent but deployment-only |
 | `{customer}-devops-sp` | Azure DevOps repository read | CI/CD Runner MI for Git sync | Persistent |
 
-### **CI/CD Runner Managed Identity**
+### **4.2 CI/CD Runner Managed Identity**
 
 The CI/CD runners use a dedicated managed identity for all deployment operations:
 
@@ -87,7 +87,7 @@ The CI/CD runners use a dedicated managed identity for all deployment operations
 - Key Vault Secrets User (to retrieve SP credentials for external services)  
 - Storage Blob Data Contributor (for artifact management)
 
-### **Architecture Pattern**
+### **4.3 Architecture Pattern**
 
 ```
 CI/CD Runner (with Managed Identity)
@@ -99,16 +99,16 @@ External Service Authentication
 └── Azure DevOps (using DevOps SP)
 ```
 
-### **Security Model**
+### **4.4 Security Model**
 
 - External service SPs stored in Key Vault, retrieved only when needed  
 - CI/CD runners authenticate to the Key Vault using their managed identity
 
-## **4\. Service Principal Authentication**
+## **5\. Service Principal Authentication**
 
 Service principals are required for specific scenarios where managed identity is not supported by external services. All service principals follow strict lifecycle management with minimal persistent access.
 
-### **Required Service Principals**
+### **5.1 Required Service Principals**
 
 | Service Principal | Permissions | Used By | Lifecycle |
 | :---- | :---- | :---- | :---- |
@@ -116,7 +116,7 @@ Service principals are required for specific scenarios where managed identity is
 | `{customer}-fabric-sp` | Fabric capacity access, workspace creation rights | Terraform for Fabric workspace creation and MI permission assignment | Persistent but only used during deployments |
 | `{customer}-devops-sp` | Read access to Azure DevOps repositories | CI/CD runners for DAG sync | Persistent access for Git operations |
 
-### **Service Principal Provisioning**
+### **5.2 Service Principal Provisioning**
 
 **Customer Administrator Responsibilities:**
 
@@ -129,7 +129,7 @@ Service principals are required for specific scenarios where managed identity is
 4. Provide credentials during onboarding  
 5. Rotate credentials before expiration
 
-### **Permission Flow**
+### **5.3 Permission Flow**
 
 **Deployment Phase:**
 
@@ -145,7 +145,7 @@ Service principals are required for specific scenarios where managed identity is
 - Fabric SP not used during runtime  
 - DevOps SP used only for Git synchronization
 
-### **Architecture Pattern**
+### **5.4 Architecture Pattern**
 
 ```
 CI/CD Runner Container
@@ -166,7 +166,7 @@ External Service (DevOps/Fabric API)
 - **DevOps SP**: Only SP with continuous runtime usage (Git operations)  
 - Cannot eliminate Fabric SP due to Fabric API limitations for admin operations
 
-### **Security Controls**
+### **5.5 Security Controls**
 
 **Credential Storage:**
 
@@ -217,7 +217,7 @@ External Service (DevOps/Fabric API)
 
 ## **6\. Service-Specific Authentication Patterns**
 
-### **Airbyte Authentication**
+### **6.1 Airbyte Authentication**
 
 Airbyte uses the `data_platform` managed identity for all Azure resource access and secret retrieval: 
 
@@ -239,11 +239,11 @@ source:
 4. Substitutes in configuration at runtime  
 5. Connects to external service with actual credentials
 
-### **dbt Container Authentication**
+### **6.2 dbt Container Authentication**
 
 dbt containers use the `data_platform` managed identity for all Azure resource access per Authentication Design Section 3\.
 
-#### Fabric Connection Pattern
+#### 6.2.1 Fabric Connection Pattern
 
 **Authentication Flow:**
 
@@ -276,7 +276,7 @@ fabric:
       client_id: ${AZURE_CLIENT_ID}  # data_platform managed identity
 ```
 
-#### Required Permissions
+#### 6.2.2 Required Permissions
 
 The `data_platform` managed identity requires these Fabric permissions:
 
@@ -289,7 +289,7 @@ The `data_platform` managed identity requires these Fabric permissions:
 
 These permissions are granted via the `Contributor` role assignment on Fabric resources.
 
-#### Runtime Execution
+#### 6.2.3 Runtime Execution
 
 1. Container initializes with `AZURE_CLIENT_ID` environment variable  
 2. dbt requests Azure AD token using managed identity  
@@ -297,7 +297,7 @@ These permissions are granted via the `Contributor` role assignment on Fabric re
 4. Automatic token refresh handled by Azure AD (typically 1-hour lifetime)  
 5. No manual token management required
 
-#### Storage Access Pattern
+#### 6.2.4 Storage Access Pattern
 
 **dbt Artifact Retrieval:**
 
@@ -321,7 +321,7 @@ Execute dbt commands with loaded configurations
 | `{customer}-{env}-airflow-st-dags` | Compiled SQL, manifest.json | Read |
 | `{customer}-{env}-dbt-st-docs` | Generated documentation | Write |
 
-### **Airflow Authentication**
+### **6.3 Airflow Authentication**
 
 **DAG Sync:**
 
@@ -340,7 +340,7 @@ Execute dbt commands with loaded configurations
 - Storage Account: `{customer}-{env}-airflow-st-dags`  
 - Azure Service Authentication: Uses `data_platform` managed identity
 
-### **CI/CD Runner Authentication**
+### **6.4 CI/CD Runner Authentication**
 
 - **Authentication**  
   - Runners use managed identity as defined in Authentication Design section 4 (Platform Authentication Architecture)  

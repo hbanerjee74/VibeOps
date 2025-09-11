@@ -15,7 +15,7 @@ This document outlines the comprehensive Azure infrastructure design for the Vib
 **Authentication**: Network security via managed identities per Authentication Design Section 3  
 **Configuration**: Customer provides network settings via Customer Onboarding Section 4.3
 
-### **Virtual Network Design**
+### **2.1 Virtual Network Design**
 
 Each customer environment (dev, prod) has a dedicated VNet (spoke) in its respective subscription for workload isolation. These spoke VNets are peered to the customer's existing hub VNet that provides shared services.
 
@@ -30,7 +30,7 @@ Each customer environment (dev, prod) has a dedicated VNet (spoke) in its respec
 | **VibeOps Dev/Prod Spokes** | **Key Vault** | Environment-specific secrets, API keys, connection strings |
 |  | **All VibeOps Platform Resources** | Networking, Storage, Data Platform, Microsoft Fabric, Observability, CI/CD infrastructure |
 
-### **Subnet Architecture per Spoke VNet**
+### **2.2 Subnet Architecture per Spoke VNet**
 
 | Subnet Name | Purpose | Resources |
 | :---- | :---- | :---- |
@@ -39,17 +39,17 @@ Each customer environment (dev, prod) has a dedicated VNet (spoke) in its respec
 | **pe-subnet** | Private endpoint connectivity | Private endpoints for all services |
 | **cicd-subnet** | CI/CD pipeline execution | Azure DevOps agents with outbound access |
 
-### **Network Security Architecture**
+### **2.3 Network Security Architecture**
 
 Network security enforced through Azure Policies defined in Governance Design section 4 (Azure Policy Framework), specifically the "Network & Security" and "Network Connectivity" policy categories.
 
-### **Traffic Flow Architecture**
+### **2.4 Traffic Flow Architecture**
 
 Replace with: "For post-deployment network integration steps, see Customer Onboarding Section 5.1"
 
 ## **3\. Compute Architecture**
 
-### **Compute Architecture**
+### **3.1 Compute Architecture**
 
 **Container-Only Infrastructure**
 
@@ -58,7 +58,7 @@ Replace with: "For post-deployment network integration steps, see Customer Onboa
 - All compute via Azure Container Instances (Phase 1\)  
 - Future: Kubernetes-based containers (deferred)
 
-### **Container Infrastructure**
+### **3.2 Container Infrastructure**
 
 **Azure Container Instances:**
 
@@ -80,7 +80,7 @@ Replace with: "For post-deployment network integration steps, see Customer Onboa
 - Includes logging levels, resource allocation, and container image versions  
 - Changes require container group redeployment
 
-### **Container Integration**
+### **3.3 Container Integration**
 
 **Network Access:**
 
@@ -95,6 +95,8 @@ Replace with: "For post-deployment network integration steps, see Customer Onboa
 
 ## **4\. Storage Architecture**
 
+**Note:** Retention policies for all storage accounts are configured via `governance.tfvars` and applied through Terraform lifecycle policies
+
 | Resource Group | Storage Account | Purpose |
 | :---- | :---- | :---- |
 | storage-rg | {customer}{env}landingst | ADLS Gen2 for Airbyte landing zone |
@@ -102,6 +104,7 @@ Replace with: "For post-deployment network integration steps, see Customer Onboa
 | deployment-rg | {customer}{env}tfstatest | Terraform state files |
 | data-platform-rg | {customer}{env}dagsst | Cosmos DAGs and configs |
 | data-platform-rg | {customer}{env}artifactsst | Local platform artifacts |
+| observability-rg | {customer}{env}observst | Elementary reports and dbt run artifacts. Append with timestamps.  |
 
 ## **5\. Database Requirements**
 
@@ -116,7 +119,7 @@ Replace with: "For post-deployment network integration steps, see Customer Onboa
 
 This section implements the On-Premises Integration Requirements defined in the NFR document.
 
-### **Data Source Connectivity**
+### **6.1 Data Source Connectivity**
 
 **Network Path:**
 
@@ -153,7 +156,7 @@ Action: Allow
 - File shares (SMB 445, SFTP 22\)  
 - REST APIs (HTTPS 443\)
 
-### **UI Service Access**
+### **6.2 UI Service Access**
 
 **Internal Access Points:**
 
@@ -171,7 +174,7 @@ Action: Allow
 - Allow HTTPS (443) from user subnets to Azure  
 - Optional: Configure SSL certificates for custom domains
 
-### **DNS Configuration**
+### **6.3 DNS Configuration**
 
 **Resolution Requirements:**
 
@@ -193,7 +196,7 @@ dns_forwarding_rules:
 - Configure conditional forwarders for on-premises domains  
 - Ensure spoke VNets can resolve on-premises hostnames
 
-### Security Considerations
+### **6.4 Security Considerations**
 
 **Authentication:**
 
@@ -207,7 +210,7 @@ dns_forwarding_rules:
 - No direct internet connectivity from spokes  
 - NSGs restrict traffic to required ports only
 
-### **Connectivity Validation**
+### **6.5 Connectivity Validation**
 
 **Testing Checklist:**
 
@@ -227,7 +230,7 @@ curl https://airbyte.data.internal.company.com  # Should reach UI
 - Authentication failures: Ensure database accepts Azure-sourced connections  
 - Port blocked: Confirm specific database ports are open through entire path
 
-### **Certificate Management for Internal Domains**
+### **6.6 Certificate Management for Internal Domains**
 
 **Self-Signed Certificate Support:**
 
@@ -265,7 +268,7 @@ container {
 
 Terragrunt is used as a thin wrapper around these Terraform modules to enforce DRY backend/provider configuration, manage per-environment variables, and orchestrate dependencies across modules (e.g., networking before private endpoints, storage before data-platform).
 
-### **Core Terraform Modules**
+### **7.1 Core Terraform Modules**
 
 | Module | Purpose | Key Resources |
 | :---- | :---- | :---- |
@@ -279,7 +282,7 @@ Terragrunt is used as a thin wrapper around these Terraform modules to enforce D
 | **governance** | Governance and compliance | See governance sub-modules below |
 | **data-platform** | Core data platform services | ADF Managed Airflow, Fabric workspace, Fabric Lakehouse.  Module creates Fabric workspace, assigns data\_platform MI as admin,  then removes deployment SP's Contributor role from resource group.  SP retains no access post-deployment. |
 
-### **Governance Sub-Modules**
+### **7.2 Governance Sub-Modules**
 
 | Sub-Module | Purpose | Key Resources |
 | :---- | :---- | :---- |
@@ -288,14 +291,14 @@ Terragrunt is used as a thin wrapper around these Terraform modules to enforce D
 | **governance/policies** | Azure Policy enforcement | Policy definitions, initiatives, assignments, exemptions |
 | **governance/budgets** | Cost management | Subscription and filtered resource budgets, action groups, notifications, cost alerts integration with Azure Monitor |
 
-### **Container Configuration Modules**
+### **7.3 Container Configuration Modules**
 
 | Module | Purpose | Configuration Elements |
 | :---- | :---- | :---- |
 | **container-configs-dbt** | dbt container setup | dbt container deployment templates, environment variables |
 | **container-configs-airbyte** | Airbyte container setup | Airbyte container configurations, metadata database setup |
 
-### **Module Dependencies**
+### **7.4 Module Dependencies**
 
 | Module | Depends On | Dependency Reason |
 | :---- | :---- | :---- |
@@ -306,7 +309,7 @@ Terragrunt is used as a thin wrapper around these Terraform modules to enforce D
 
 Note: Each module configures diagnostic settings to send logs and metrics to the customer's hub Log Analytics Workspace via policy-enforced Azure Monitor integration.
 
-### **Module Integration Patterns**
+### **7.5 Module Integration Patterns**
 
 **Governance Integration:**
 
